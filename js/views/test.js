@@ -47,6 +47,7 @@ export function testView(main, { testId, focus }) {
       ),
       h(
         'div.bank-actions',
+        h('a.button.primary-link', { href: `#/test/${test.id}/print` }, 'Print…'),
         h('a.button', { href: `#/test/${test.id}/summary` }, 'Summary'),
         h('button', { onclick: duplicateTest }, 'Duplicate'),
         h('button.danger', { onclick: deleteTest }, 'Delete test'),

@@ -7,13 +7,14 @@ A test generator for teachers: question banks, algorithmic questions, printed ve
 - **M1 foundation:** question banks, an editor for True/False, Multiple Choice, Multiple Response, Numeric Response and Short Answer/Problem/Essay questions, LaTeX math via KaTeX, browser storage, and library files.
 - **M2 algorithms:** dynamic questions with variables, conditions, user functions, about 120 built-in functions and display formats, seeded so each version's values are reproducible (`js/algo/`).
 - **M3 test builder:** tests made of copies of bank questions; six ways to add questions (random, list, viewing, standard, criteria with search syntax, all), a quick wizard, reordering, sorting, scrambling, points, a summary report, and saving edits back to the bank.
+- **M4 printing:** 1–26 versions with scrambled questions and choices and recalculated values, answer keys, answer strips, a version map, and layout settings (paper, margins, one or two columns, headers and footers, numbering, spacing, choice labels, points, instructions), laid out on measured pages and printed through the browser (`js/print/`).
 
 ## Running it
 
-It's a static site with no build step, but it has to be served over http (Safari won't load the modules from a file):
+It's a static site with no build step, but it has to be served over http (Safari won't load the modules from a file). `serve.py` serves it without browser caching, so edits show up on reload:
 
 ```bash
-python3 -m http.server 8642 --bind 127.0.0.1
+python3 serve.py
 ```
 
 Then open <http://127.0.0.1:8642/>. Unit tests run at <http://127.0.0.1:8642/tests.html>.

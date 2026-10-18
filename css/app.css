@@ -306,7 +306,83 @@ a.button.wide { width: 100%; justify-content: center; margin-top: 6px; }
 .sort-values button { padding: 1px 8px; margin-left: 4px; }
 .points-table td { padding: 3px 12px 3px 0; }
 
+/* ---- print screen ---- */
+
+.print-tip { margin: -6px 0 12px; font-size: 13px; color: var(--muted); }
+.print-layout { display: grid; grid-template-columns: 330px 1fr; gap: 20px; align-items: start; }
+.print-settings { position: sticky; top: 72px; max-height: calc(100vh - 90px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+.print-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+.print-group summary { cursor: pointer; font-weight: 600; }
+.print-group-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; font-size: 14px; }
+.print-group-body input:not([type]) { width: 100%; }
+.panel-foot { margin: 4px 0 20px; }
+.print-preview { overflow: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; min-height: 400px; }
+.print-output { display: flex; flex-direction: column; gap: 24px; width: max-content; margin: 0 auto; }
+.main:has(.print-layout) { max-width: none; }
+
+/* Printed pages are always black on white, whatever the app theme. */
+.print-root {
+  --ink: #000;
+  font-family: var(--print-font, "Times New Roman", serif);
+  font-size: var(--print-size, 12pt);
+  line-height: 1.3;
+  color: var(--ink);
+  background: #fff;
+  color-scheme: light;
+}
+.page { box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 2px 10px rgb(0 0 0 / 0.25); flex: none; }
+.page-header { font-size: 0.92em; text-align: center; padding-bottom: 0.12in; }
+.page-header:empty { display: none; }
+.page-content { flex: 1; overflow: hidden; }
+.page-footer { font-size: 0.85em; text-align: center; padding-top: 0.1in; min-height: 1em; }
+.print-measure { position: absolute; left: -10000px; top: 0; visibility: hidden; }
+.measure-box { display: flow-root; }
+.block { display: flow-root; }
+.band.cols { display: grid; }
+.band.cols.rule .col + .col { border-left: 0.75pt solid #000; padding-left: 0.15in; margin-left: -0.15in; }
+.muted-print { color: #444; font-size: 0.9em; }
+
+.name-line { padding: 0.04in 0 0.18in; white-space: pre; }
+.ps-head { padding: 0.06in 0 0.08in; break-after: avoid; }
+.ps-head.ruled { border-top: 0.75pt solid #000; padding-top: 0.1in; }
+.ps-title { font-weight: bold; text-transform: uppercase; letter-spacing: 0.03em; }
+.ps-inst { font-style: italic; }
+.pq { display: grid; grid-template-columns: auto 1fr; column-gap: 0.08in; padding-bottom: var(--q-gap, 12pt); }
+.pq-num { display: flex; gap: 0.06in; white-space: nowrap; }
+.pq-blank { display: inline-block; width: 0.45in; border-bottom: 0.75pt solid #000; height: 1.05em; }
+.pq-stem p { margin: 0 0 0.06in; }
+.pq-stem p:last-child { margin-bottom: 0; }
+.pq-pts, .pq-pts-line { font-size: 0.9em; }
+.pq-choices { list-style: none; margin: 0.06in 0 0; padding: 0; display: grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); gap: 0.03in 0.2in; }
+.pq-choices li { display: flex; gap: 0.08in; align-items: baseline; }
+.pq-label { min-width: 0.25in; }
+.pq-answer-line { margin-top: 0.08in; }
+.pq-write { display: inline-block; width: 1.8in; border-bottom: 0.75pt solid #000; height: 1em; }
+.pq-lines { margin-top: 0.06in; }
+.pq-ruled { height: 0.36in; border-bottom: 0.5pt solid #555; }
+.print-root .q-image { max-width: 100%; }
+.print-root .q-table th, .print-root .q-table td { border: 0.5pt solid #000; }
+.print-root .math-display { overflow: visible; }
+
+.pk { display: grid; grid-template-columns: 0.4in 1fr; padding-bottom: var(--q-gap, 6pt); }
+.pk-section { font-weight: bold; text-transform: uppercase; padding: 0.08in 0 0.04in; }
+.pk-label { font-weight: bold; }
+.pk-rat { font-size: 0.92em; }
+.pk-rat p { margin: 0.02in 0; }
+.pk-meta { font-size: 0.85em; color: #333; }
+.strip-line { display: flex; gap: 0.1in; border-bottom: 0.5pt solid #999; padding: 0.04in 0.06in; }
+.strip-num { min-width: 0.35in; text-align: right; }
+.strip-ans { font-weight: bold; }
+.vmap { border-collapse: collapse; margin-bottom: 0.15in; font-size: 0.9em; }
+.vmap th, .vmap td { border: 0.5pt solid #000; padding: 0.02in 0.08in; text-align: center; }
+
 @media print {
+  body.printing .main > :not(.print-layout), body.printing .print-settings { display: none !important; }
+  body.printing .print-layout { display: block; }
+  body.printing .print-preview { border: 0; padding: 0; background: #fff; overflow: visible; }
+  body.printing .print-output { zoom: 1 !important; display: block; }
+  body.printing .page { box-shadow: none; break-after: page; }
+  body.printing .page:last-child { break-after: auto; }
   .app-header, .sidebar, .banner, .no-print, .toast { display: none !important; }
   .layout { display: block; }
   .main { padding: 0; max-width: none; }

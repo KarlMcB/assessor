@@ -4,8 +4,9 @@ import modelTests from './model.test.js';
 import richtextTests from './richtext.test.js';
 import algoTests from './algo.test.js';
 import testModelTests from './testmodel.test.js';
+import printTests from './print.test.js';
 
-const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests, tests: testModelTests };
+const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests, tests: testModelTests, printing: printTests };
 const results = document.getElementById('results');
 let passed = 0;
 let failed = 0;

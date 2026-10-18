@@ -11,6 +11,7 @@ import { editorView } from './views/editor.js';
 import { testView } from './views/test.js';
 import { selectView } from './views/select.js';
 import { wizardView, summaryView } from './views/wizard.js';
+import { printView } from './views/print.js';
 
 const main = document.getElementById('main');
 const sidebar = document.getElementById('sidebar');
@@ -37,6 +38,7 @@ function parseRoute(hash) {
     if (parts[2] === 'new' && parts[3]) return { view: 'editor', testId, newType: parts[3] };
     if (parts[2] === 'add' && parts[3]) return { view: 'select', testId, method: parts[3] };
     if (parts[2] === 'summary') return { view: 'summary', testId };
+    if (parts[2] === 'print') return { view: 'print', testId };
     return { view: 'test', testId, focus: params.focus };
   }
   if (parts[0] === 'wizard') return { view: 'wizard' };
@@ -61,6 +63,7 @@ function render() {
   else if (route.view === 'test') current = testView(main, route);
   else if (route.view === 'select') current = selectView(main, route);
   else if (route.view === 'summary') current = summaryView(main, route);
+  else if (route.view === 'print') current = printView(main, route);
   else if (route.view === 'wizard') current = wizardView(main);
   else current = homeView(main, { onNewBank: createBank, onNewTest: createTest });
   current.route = route;
