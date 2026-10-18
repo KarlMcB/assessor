@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>assessor</title>
+  <meta name="description" content="A personal test generator: question banks, algorithmic questions, printed versions and Schoology export.">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/katex/katex.min.css">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <h1><a href="#/">assessor</a></h1>
+    <span id="status" class="status"></span>
+    <div class="header-actions">
+      <button id="open-library" type="button">Open Library…</button>
+      <button id="save-library" type="button" class="primary" title="Save Library (⌘S)">Save Library</button>
+    </div>
+  </header>
+  <div id="banner" class="banner" hidden></div>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar"></aside>
+    <main id="main" class="main"></main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
