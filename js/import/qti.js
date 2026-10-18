@@ -110,7 +110,7 @@ function splitFeedback(html) {
 
 function itemToQuestion(item, ctx, settings) {
   const kind = kindOf(item);
-  if (['matching', 'unsupported', 'text'].includes(kind)) return { skip: TYPE_NAMES[kind] };
+  if (['unsupported', 'text'].includes(kind)) return { skip: TYPE_NAMES[kind] };
 
   const presentation = first(item, 'presentation');
   const stemMaterial = presentation && childrenNamed(presentation, 'material')[0];
@@ -151,6 +151,30 @@ function itemToQuestion(item, ctx, settings) {
     }
     while (q.choices.length < 2) q.choices.push(newChoice());
     return { question: q, note: q.choices.length > 8 ? 'more than 8 choices' : null };
+  }
+
+  if (kind === 'matching') {
+    const lids = all(item, 'response_lid');
+    if (!lids.length) return { skip: 'Matching with no items' };
+    const q = make('match');
+    const firstLabels = all(lids[0], 'response_label');
+    q.choices = firstLabels.map((l) => ({ id: newId(), text: htmlToInline(materialHtml(first(l, 'material')), opts), src: l.getAttribute('ident') }));
+    const bySrc = new Map(q.choices.map((c) => [c.src, c.id]));
+    // Correct choice for each item: a varequal on that response that adds points
+    const answerFor = (lidIdent) => {
+      for (const cond of all(item, 'respcondition')) {
+        const v = all(cond, 'varequal').find((e) => e.getAttribute('respident') === lidIdent && !e.closest('not'));
+        const setvar = first(cond, 'setvar');
+        if (v && setvar && Number(setvar.textContent) > 0) return v.textContent.trim();
+      }
+      return null;
+    };
+    q.pairs = lids.map((lid) => {
+      const promptMaterial = childrenNamed(lid, 'material')[0] ?? first(lid, 'material');
+      return { id: newId(), prompt: htmlToInline(materialHtml(promptMaterial), opts), choiceId: bySrc.get(answerFor(lid.getAttribute('ident'))) ?? null };
+    });
+    q.choices.forEach((c) => delete c.src);
+    return { question: q };
   }
 
   if (kind === 'numerical') {

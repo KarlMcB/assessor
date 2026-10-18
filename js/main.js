@@ -1,7 +1,7 @@
 // App shell: header, sidebar, routing and library file commands.
 
 import { newBank, questionCountLabel, readBankFile, newId } from './model.js';
-import { pickFile, store } from './store.js';
+import { pickFile, pickFiles, store } from './store.js';
 import { h, add, clear, toast, formatTime } from './ui.js';
 import { newTest } from './testmodel.js';
 import { bankContainer, testContainer } from './containers.js';
@@ -12,7 +12,7 @@ import { testView } from './views/test.js';
 import { selectView } from './views/select.js';
 import { wizardView, summaryView } from './views/wizard.js';
 import { printView } from './views/print.js';
-import { importCartridge } from './views/import.js';
+import { importCartridge, importText2qti } from './views/import.js';
 
 const main = document.getElementById('main');
 const sidebar = document.getElementById('sidebar');
@@ -96,7 +96,7 @@ function renderSidebar() {
       ),
     ),
     h('button.wide', { onclick: createBank }, '+ New bank'),
-    h('button.wide', { onclick: importBank, title: 'An assessor bank, or a Schoology / Common Cartridge / QTI zip' }, 'Import…'),
+    h('button.wide', { onclick: importBank, title: 'An assessor bank, a Schoology / Common Cartridge / QTI zip, or a text2qti text file' }, 'Import…'),
     h('div.side-heading.spaced', 'Tests'),
     h(
       'nav.bank-list',
@@ -178,11 +178,17 @@ async function openLibrary() {
   }
 }
 
-// Import an assessor bank (.bank.json) or a Schoology / QTI zip (.imscc, .zip).
+// Import an assessor bank (.bank.json), a Schoology / QTI zip (.imscc, .zip),
+// or a text2qti text file (with its image files chosen alongside).
 async function importBank() {
-  const file = await pickFile('.json,application/json,.zip,.imscc,application/zip');
-  if (!file) return;
-  if (/\.(zip|imscc)$/i.test(file.name)) return importCartridge(file);
+  const files = await pickFiles('.json,application/json,.zip,.imscc,application/zip,.txt,.md,text/plain,text/markdown,image/*');
+  if (!files.length) return;
+  const zip = files.find((f) => /\.(zip|imscc)$/i.test(f.name));
+  if (zip) return importCartridge(zip);
+  const text = files.find((f) => /\.(txt|md|markdown|text)$/i.test(f.name));
+  if (text) return importText2qti(text, files.filter((f) => f.type.startsWith('image/')));
+  const file = files.find((f) => /\.json$/i.test(f.name));
+  if (!file) return toast('Choose an assessor bank (.bank.json), a Schoology or QTI zip, or a text2qti .txt file', 'error');
   try {
     const { bank, images } = readBankFile(JSON.parse(await file.text()));
     if (store.lib.banks.some((b) => b.id === bank.id)) {

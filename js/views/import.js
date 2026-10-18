@@ -1,11 +1,12 @@
 // Import a Schoology / Common Cartridge / QTI zip: preview what was found,
 // then add each quiz as a bank (and optionally as a test).
 
-import { QUESTION_TYPES, TYPE_ORDER, newBank, questionCountLabel } from '../model.js';
+import { QUESTION_TYPES, TYPE_ORDER, newBank, newId, questionCountLabel } from '../model.js';
+import { parseText2qti } from '../import/text2qti.js';
 import { newTest, addToTest } from '../testmodel.js';
 import { readCartridge } from '../import/qti.js';
 import { store } from '../store.js';
-import { h, toast, openDialog } from '../ui.js';
+import { h, toast, openDialog, imageFileToDataUrl } from '../ui.js';
 
 export async function importCartridge(file) {
   let result;
@@ -16,6 +17,46 @@ export async function importCartridge(file) {
     toast(err.message || 'That file couldn’t be read', 'error');
     return;
   }
+  showImport(result);
+}
+
+// A text2qti text file, plus any image files it refers to (picked together).
+export async function importText2qti(textFile, imageFiles = []) {
+  const images = {};
+  const byName = new Map();
+  for (const f of imageFiles) {
+    const id = newId();
+    images[id] = await imageFileToDataUrl(f, 1600);
+    byName.set(f.name, id);
+  }
+  let parsed;
+  try {
+    parsed = parseText2qti(await textFile.text(), { settings: store.lib.settings, images: byName });
+  } catch (err) {
+    toast(err.message || 'That file couldn’t be read', 'error');
+    return;
+  }
+  if (!parsed.questions.length) {
+    toast('No questions were found. Questions start with a number and a full stop, e.g. “1. …”.', 'error');
+    return;
+  }
+  const title = parsed.title === 'Imported quiz' ? textFile.name.replace(/\.[^.]+$/, '') : parsed.title;
+  showImport({
+    banks: [{ title, questions: parsed.questions }],
+    images,
+    skipped: parsed.skipped.map((s) => ({ ...s, bank: title })),
+    notes: {
+      remoteImages: 0,
+      missingImages: parsed.notes.missingImages.size,
+      missingNames: [...parsed.notes.missingImages],
+      groups: parsed.notes.groups,
+      converted: parsed.notes.converted.map((c) => ({ ...c, bank: title })),
+      text2qti: true,
+    },
+  });
+}
+
+function showImport(result) {
   const { banks, images, skipped, notes } = result;
   const total = banks.reduce((n, b) => n + b.questions.length, 0);
   const picks = banks.map((b) => ({ bank: b, include: h('input', { type: 'checkbox', checked: b.questions.length > 0 }) }));
@@ -40,9 +81,13 @@ export async function importCartridge(file) {
     notes.remoteImages
       ? h('p.field-hint', `${notes.remoteImages} image${notes.remoteImages === 1 ? ' is' : 's are'} linked from the web (e.g. Schoology or Google) rather than stored in the file. They show while those links work, which may need you to be signed in. To keep one for good, save it and paste it into the question.`)
       : null,
-    notes.missingImages ? h('p.field-hint', `${notes.missingImages} image${notes.missingImages === 1 ? ' was' : 's were'} referenced but missing from the file.`) : null,
+    notes.missingImages
+      ? h('p.field-hint', notes.text2qti
+          ? `Image files not found: ${notes.missingNames.join(', ')}. Choose them together with the text file to include them.`
+          : `${notes.missingImages} image${notes.missingImages === 1 ? ' was' : 's were'} referenced but missing from the file.`)
+      : null,
     notes.groups ? h('p.field-hint', 'Random-pick question groups were imported as ordinary questions.') : null,
-    h('p.field-hint', 'Points aren’t stored in Schoology exports, so questions get the default points for their type. Answers, choices, feedback and images come across; fonts and colours don’t.'),
+    notes.text2qti ? null : h('p.field-hint', 'Points aren’t stored in Schoology exports, so questions get the default points for their type. Answers, choices, feedback and images come across; fonts and colours don’t.'),
   ];
 
   openDialog('Import questions', body, [

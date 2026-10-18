@@ -7,8 +7,9 @@ import testModelTests from './testmodel.test.js';
 import printTests from './print.test.js';
 import exportTests from './export.test.js';
 import importTests from './import.test.js';
+import m6Tests from './m6.test.js';
 
-const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests, tests: testModelTests, printing: printTests, export: exportTests, import: importTests };
+const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests, tests: testModelTests, printing: printTests, export: exportTests, import: importTests, 'matching, narratives, graphs, text2qti': m6Tests };
 const results = document.getElementById('results');
 let passed = 0;
 let failed = 0;

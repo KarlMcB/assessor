@@ -250,6 +250,12 @@ export function evaluateIn(runResult, exprText) {
   return ctx.eval(parseExpression(exprText));
 }
 
+// Evaluate a parsed expression against a run, with extra local variables (e.g. x for graphs).
+export function evaluateTree(runResult, tree, locals = new Map()) {
+  const ctx = new Context({ rng: makeRng('graph'), funcs: runResult.program?.funcs ?? new Map(), vars: runResult.values ?? new Map() });
+  return ctx.eval(tree, locals);
+}
+
 // ---- placeholders -------------------------------------------------------------------
 
 // Resolve the inside of a [[…]] placeholder: "name", "name :: fmt", "= expr", "= expr :: fmt".
@@ -311,6 +317,7 @@ export function hasPlaceholders(text) {
 export function questionTexts(q) {
   const texts = [['Question', q.stem], ['Rationale', q.rationale]];
   if (q.choices) q.choices.forEach((c, i) => texts.push([`Choice ${'ABCDEFGH'[i]}`, c.text]));
+  if (q.pairs) q.pairs.forEach((p, i) => texts.push([`Item ${i + 1}`, p.prompt]));
   if (q.type === 'num') {
     texts.push(['Answer', q.answer.value]);
     q.answer.accepted.forEach((a) => texts.push(['Accepted answer', a]));
@@ -327,19 +334,39 @@ const instanceCache = new Map();
 
 // Values for one question with one seed. `seed` defaults to the question id
 // so a question looks the same every time it's previewed.
-export function instantiate(q, { seed = q.id, version = 'A' } = {}) {
-  const key = `${q.algorithm || ''}\u0000${seed}\u0000${version}`;
+// Values for a narrative's own algorithm (shared by its questions).
+export function narrativeRun(narrative, version = 'A') {
+  if (!narrative) return null;
+  const key = `N\u0000${narrative.algorithm || ''}\u0000${narrative.seed}\u0000${version}`;
+  let r = instanceCache.get(key);
+  if (!r) {
+    r = run(narrative.algorithm || '', { seed: narrative.seed, version });
+    instanceCache.set(key, r);
+  }
+  return r;
+}
+
+// Values for one question with one seed. `seed` defaults to the question id
+// so a question looks the same every time it's previewed. A narrative
+// ({ algorithm, seed }) supplies shared variables.
+export function instantiate(q, { seed = q.id, version = 'A', narrative = null } = {}) {
+  const parent = narrative?.algorithm?.trim() ? narrativeRun(narrative, version) : null;
+  const key = `${q.algorithm || ''}\u0000${seed}\u0000${version}\u0000${parent ? `${narrative.algorithm}\u0000${narrative.seed}` : ''}`;
   let runResult = instanceCache.get(key);
   if (!runResult) {
-    runResult = run(q.algorithm || '', { seed, version });
+    if (parent?.error) {
+      runResult = { ...parent, error: { line: parent.error.line, message: `Narrative algorithm: ${parent.error.message}` } };
+    } else {
+      runResult = run(q.algorithm || '', { seed, version, parent });
+    }
     if (instanceCache.size > 500) instanceCache.clear();
     instanceCache.set(key, runResult);
   }
   return {
     run: runResult,
-    dynamic: isDynamic(q),
+    dynamic: isDynamic(q) || Boolean(parent),
     error: runResult.error,
-    resolve: (content) => resolvePlaceholder(runResult, content),
+    resolve: Object.assign((content) => resolvePlaceholder(runResult, content), { run: runResult }),
     plain: (text) => resolvePlainText(runResult, text),
   };
 }

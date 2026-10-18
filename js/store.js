@@ -141,6 +141,17 @@ export function downloadJson(data, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
+export function pickFiles(accept) {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.multiple = true;
+    input.addEventListener('change', () => resolve([...input.files]), { once: true });
+    input.click();
+  });
+}
+
 export function pickFile(accept) {
   return new Promise((resolve) => {
     const input = document.createElement('input');

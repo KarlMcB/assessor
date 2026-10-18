@@ -73,7 +73,7 @@ export function matchesQuery(clauses, text) {
 
 // All searchable text of a question.
 export function questionSearchText(q) {
-  const parts = [q.stem, q.rationale, q.algorithm, ...(q.choices || []).map((c) => c.text), q.answer?.model, q.answer?.value];
+  const parts = [q.stem, q.rationale, q.algorithm, ...(q.choices || []).map((c) => c.text), ...(q.pairs || []).map((p) => p.prompt), q.answer?.model, q.answer?.value];
   const m = q.meta;
   parts.push(m.difficulty, m.reference, m.topic, m.notes, m.misc, ...m.standards, ...m.objectives, ...m.keywords);
   return parts.filter(Boolean).join(' ');

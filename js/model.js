@@ -11,12 +11,13 @@ export const QUESTION_TYPES = {
   tf: { label: 'True/False', short: 'T/F' },
   mc: { label: 'Multiple Choice', short: 'MC', choices: true },
   mr: { label: 'Multiple Response', short: 'MR', choices: true },
+  match: { label: 'Matching', short: 'Match' },
   num: { label: 'Numeric Response', short: 'Num' },
   essay: { label: 'Short Answer / Problem / Essay', short: 'SA' },
 };
 
 // Order in which type groups appear in a bank or test.
-export const TYPE_ORDER = ['tf', 'mc', 'mr', 'num', 'essay'];
+export const TYPE_ORDER = ['tf', 'mc', 'mr', 'match', 'num', 'essay'];
 
 export const ESSAY_KINDS = { short: 'Short Answer', problem: 'Problem', essay: 'Essay' };
 
@@ -34,7 +35,7 @@ export function now() {
 
 export function defaultSettings() {
   return {
-    defaultPoints: { tf: 1, mc: 1, mr: 1, num: 1, essay: 5 },
+    defaultPoints: { tf: 1, mc: 1, mr: 1, match: 4, num: 1, essay: 5 },
     defaultChoices: 4,
     backupReminderDays: 3,
   };
@@ -67,6 +68,24 @@ export function newChoice(text = '') {
   return { id: newId(), text, correct: false, lockPosition: false };
 }
 
+// Matching: prompts (left) each point at one of the choices (right).
+// There may be more choices than prompts (distractors).
+export function newPair(prompt = '', choiceId = null) {
+  return { id: newId(), prompt, choiceId };
+}
+
+export const MAX_MATCH = 26;
+
+// A narrative is a shared passage, diagram or data set that several questions use.
+// Its algorithm's variables are available to every linked question.
+export function newNarrative(title = 'New narrative') {
+  return { id: newId(), title, body: '', algorithm: '' };
+}
+
+export function narrativeOf(owner, q) {
+  return q?.narrativeId ? owner?.narratives?.find((n) => n.id === q.narrativeId) ?? null : null;
+}
+
 function typeFields(type, settings) {
   switch (type) {
     case 'mc':
@@ -76,6 +95,10 @@ function typeFields(type, settings) {
     }
     case 'tf':
       return { answer: true };
+    case 'match': {
+      const choices = Array.from({ length: 4 }, () => ({ id: newId(), text: '' }));
+      return { choices, pairs: choices.map((c) => newPair('', c.id)), columns: 1 };
+    }
     case 'num':
       return { answer: { value: '', unit: '', tolerance: '', toleranceType: 'abs', accepted: [] } };
     case 'essay':
@@ -126,7 +149,7 @@ export function changeType(q, type, settings = defaultSettings()) {
 }
 
 function stripTypeFields(q) {
-  const { choices, columns, answer, kind, answerLines, ...rest } = q;
+  const { choices, columns, answer, kind, answerLines, pairs, ...rest } = q;
   return rest;
 }
 
@@ -134,7 +157,15 @@ export function duplicateQuestion(q) {
   const copy = structuredClone(q);
   copy.id = newId();
   copy.created = copy.modified = now();
-  if (copy.choices) copy.choices.forEach((c) => (c.id = newId()));
+  if (copy.choices) {
+    const ids = new Map();
+    copy.choices.forEach((c) => {
+      const id = newId();
+      ids.set(c.id, id);
+      c.id = id;
+    });
+    if (copy.pairs) copy.pairs.forEach((p) => { p.id = newId(); p.choiceId = ids.get(p.choiceId) ?? null; });
+  }
   return copy;
 }
 
@@ -172,6 +203,14 @@ export function validateQuestion(q, resolve = (s) => s) {
       if (String(tol).trim() !== '' && !(parseNumber(tol) >= 0)) problems.push('Tolerance must be a number zero or more.');
       break;
     }
+    case 'match': {
+      const choiceIds = new Set(q.choices.filter((c) => c.text.trim()).map((c) => c.id));
+      if (choiceIds.size < 2) problems.push('Needs at least 2 choices with text.');
+      if (!q.pairs.length) problems.push('Needs at least one item to match.');
+      if (q.pairs.some((p) => !p.prompt.trim())) problems.push('Some items to match are empty.');
+      if (q.pairs.some((p) => !choiceIds.has(p.choiceId))) problems.push('Every item needs a matching choice.');
+      break;
+    }
     case 'essay':
       break;
   }
@@ -191,6 +230,7 @@ const IMG_REF = /!\[[^\]]*\]\(img:([a-z0-9]+)(?:\|\d+)?\)/g;
 function textsOf(q) {
   const texts = [q.stem, q.rationale];
   if (q.choices) texts.push(...q.choices.map((c) => c.text));
+  if (q.pairs) texts.push(...q.pairs.map((p) => p.prompt));
   if (q.type === 'essay') texts.push(q.answer.model);
   return texts;
 }
@@ -206,6 +246,7 @@ export function imageRefsInLibrary(lib) {
   const ids = new Set();
   for (const b of lib.banks) for (const id of imageRefsInBank(b)) ids.add(id);
   for (const t of lib.tests) for (const item of t.items || []) for (const s of textsOf(item.question)) for (const m of s.matchAll(IMG_REF)) ids.add(m[1]);
+  for (const t of lib.tests) for (const n of t.narratives || []) for (const m of (n.body || '').matchAll(IMG_REF)) ids.add(m[1]);
   return ids;
 }
 

@@ -2,7 +2,9 @@
 
 import { QUESTION_TYPES, TYPE_ORDER, bankFile, duplicateQuestion, questionCountLabel, sortedByType } from '../model.js';
 import { downloadJson, store } from '../store.js';
-import { questionBody, questionProblems, metaChips, typeLabel } from '../question-view.js';
+import { questionBody, questionProblems, metaChips, typeLabel, narrativeContext } from '../question-view.js';
+import { narrativesPanel, narrativeCard } from './narrative.js';
+import { narrativeOf } from '../model.js';
 import { isDynamic } from '../algo/engine.js';
 import { exportDialog } from './export.js';
 import { h, add, clear, select, toast } from '../ui.js';
@@ -104,6 +106,7 @@ export function bankView(main, { bankId, focus }) {
   function renderList() {
     clear(list);
     countEl.textContent = questionCountLabel(bank.questions.length);
+    add(list, narrativesPanel(bank, bank.questions));
     const qs = visibleQuestions();
     if (!bank.questions.length) {
       list.append(h('div.empty', h('p', 'This bank has no questions yet. Use the buttons above to add one.')));
@@ -115,13 +118,22 @@ export function bankView(main, { bankId, focus }) {
     }
     const order = displayOrder(qs);
     const numberOf = new Map(order.map((q, i) => [q.id, i + 1]));
+    // A narrative shows above the first of each run of questions linked to it.
+    let prevNarrative = null;
+    const withNarrative = (q) => {
+      const n = narrativeOf(bank, q);
+      if (n && n.id !== prevNarrative) list.append(narrativeCard(n, store.lib.images, n.id));
+      prevNarrative = n?.id ?? null;
+      list.append(card(q, numberOf.get(q.id), order));
+    };
     if (st.grouped) {
       for (const g of sortedByType(qs)) {
         list.append(h('h3.type-heading', `${QUESTION_TYPES[g.type].label} `, h('span.muted', `(${g.questions.length})`)));
-        for (const q of g.questions) list.append(card(q, numberOf.get(q.id), order));
+        prevNarrative = null;
+        for (const q of g.questions) withNarrative(q);
       }
     } else {
-      for (const q of order) list.append(card(q, numberOf.get(q.id), order));
+      for (const q of order) withNarrative(q);
     }
     if (focus) {
       const el = list.querySelector(`[data-qid="${focus}"]`);
@@ -134,7 +146,8 @@ export function bankView(main, { bankId, focus }) {
   }
 
   function card(q, number, order) {
-    const problems = questionProblems(q);
+    const narrative = narrativeContext(narrativeOf(bank, q), narrativeOf(bank, q)?.id);
+    const problems = questionProblems(q, q.id, narrative);
     const editHref = `#/bank/${bank.id}/q/${q.id}`;
     const others = store.lib.banks.filter((b) => b.id !== bank.id);
     return h(
@@ -146,6 +159,7 @@ export function bankView(main, { bankId, focus }) {
         h('span.badge', typeLabel(q)),
         h('span.muted', `${q.points} pt${Number(q.points) === 1 ? '' : 's'}`),
         isDynamic(q) ? h('span.badge.dynamic', { title: 'Values change for each version' }, 'Dynamic') : null,
+        narrativeOf(bank, q) ? h('span.chip', { title: 'Linked to this narrative' }, `📄 ${narrativeOf(bank, q).title}`) : null,
         q.flags.doNotUse ? h('span.badge.warn', 'Not used on tests') : null,
         problems.length ? h('span.badge.warn', { title: problems.join('\n') }, `${problems.length} issue${problems.length > 1 ? 's' : ''}`) : null,
         h(
@@ -164,7 +178,7 @@ export function bankView(main, { bankId, focus }) {
           h('button.danger', { onclick: () => remove(q) }, 'Delete'),
         ),
       ),
-      h('div.q-card-body', questionBody(q, store.lib.images, { showAnswer: st.answers, showRationale: st.answers })),
+      h('div.q-card-body', questionBody(q, store.lib.images, { showAnswer: st.answers, showRationale: st.answers, narrative })),
       metaChips(q).length ? h('footer.q-meta', metaChips(q)) : null,
     );
   }

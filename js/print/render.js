@@ -4,13 +4,13 @@
 
 import { ESSAY_KINDS, QUESTION_TYPES } from '../model.js';
 import { renderInline, renderRich, escapeHtml } from '../richtext.js';
-import { instantiate } from '../algo/engine.js';
+import { instantiate, narrativeRun, resolvePlaceholder } from '../algo/engine.js';
 import { choiceKey, choiceLabel, fillTokens } from './layout.js';
 
 const OBJECTIVE = new Set(['tf', 'mc', 'mr']);
 
 function inst(entry, version) {
-  const i = instantiate(entry.question, { seed: entry.seed, version });
+  const i = instantiate(entry.question, { seed: entry.seed, version, narrative: entry.narrative });
   return { i, resolve: i.dynamic ? i.resolve : null };
 }
 
@@ -58,7 +58,40 @@ export function questionBlock(entry, ctx) {
     const lines = Math.max(0, Number(q.answerLines) || 0);
     if (lines) body += layout.essayLines ? `<div class="pq-lines">${'<div class="pq-ruled"></div>'.repeat(lines)}</div>` : `<div class="pq-space" style="height:${lines * 0.36}in"></div>`;
   }
+  if (q.type === 'match') return matchBlock(entry, ctx, stem, resolve);
   return `<div class="pq"><div class="pq-num">${blank}<span>${entry.number}.</span></div><div class="pq-body">${body}</div></div>`;
+}
+
+// Matching: instructions, lettered choices, then numbered items with blanks.
+const noAlt = (layout) => ({ ...layout, alternateChoices: false });
+
+function matchBlock(entry, ctx, stem, resolve) {
+  const { layout, images, columns } = ctx;
+  const q = entry.question;
+  const cols = Math.min(columns === 2 ? 2 : 3, Math.max(1, Number(q.columns) || 1));
+  const choices = `<ol class="pq-choices pm-choices" style="--cols:${cols}">${q.choices
+    .map((c, i) => `<li><span class="pq-label">${choiceLabel(i, 1, noAlt(layout))}</span><span class="pq-choice">${renderInline(c.text, images, resolve)}</span></li>`)
+    .join('')}</ol>`;
+  const items = q.pairs
+    .map((p, i) => `<div class="pq pm-item"><div class="pq-num"><span class="pq-blank"></span><span>${entry.number + i}.</span></div><div class="pq-body">${renderInline(p.prompt, images, resolve)}</div></div>`)
+    .join('');
+  return `<div class="pq-match"><div class="pq-stem">${stem}</div>${choices}<div class="pm-items">${items}</div></div>`;
+}
+
+function matchKeys(entry, layout) {
+  const q = entry.question;
+  return q.pairs.map((p, i) => {
+    const k = q.choices.findIndex((c) => c.id === p.choiceId);
+    return { number: entry.number + i, answer: k === -1 ? '?' : choiceKey(k, 1, noAlt(layout)) };
+  });
+}
+
+// A narrative printed once before its questions.
+export function narrativeBlock(narrative, first, last, ctx) {
+  const r = narrativeRun(narrative, ctx.version);
+  const resolve = narrative.algorithm?.trim() ? Object.assign((c) => resolvePlaceholder(r, c), { run: r }) : null;
+  const range = first === last ? `question ${first}` : `questions ${first}–${last}`;
+  return `<div class="pn"><div class="pn-lead">Use the following to answer ${range}.</div><div class="pn-body">${renderRich(narrative.body, ctx.images, resolve)}</div></div>`;
 }
 
 // Whether a question must span both columns in a two-column layout.
@@ -88,6 +121,8 @@ export function answerText(entry, layout, version, images) {
     }
     case 'essay':
       return q.answer.model?.trim() ? renderInline(q.answer.model, images, resolve) : '<i>Answers will vary.</i>';
+    case 'match':
+      return matchKeys(entry, layout).map((k) => `${k.number}–${k.answer}`).join(', ');
   }
   return '';
 }
@@ -95,6 +130,9 @@ export function answerText(entry, layout, version, images) {
 export function keyEntry(entry, ctx) {
   const { layout, images, version } = ctx;
   const q = entry.question;
+  if (q.type === 'match') {
+    return matchKeys(entry, layout).map((k) => `<div class="pk"><div class="pk-num">${k.number}.</div><div class="pk-body"><div class="pk-ans"><span class="pk-label">ANS:</span> ${k.answer}</div></div></div>`).join('');
+  }
   const { resolve } = inst(entry, version);
   const k = layout.key;
   const meta = [];
@@ -117,6 +155,9 @@ export function keySectionHeading(section) {
 // ---- answer strip and version map ----------------------------------------------------
 
 export function stripLine(entry, layout, version, images) {
+  if (entry.question.type === 'match') {
+    return matchKeys(entry, layout).map((k) => `<div class="strip-line"><span class="strip-num">${k.number}.</span><span class="strip-ans">${k.answer}</span></div>`).join('');
+  }
   const ans = entry.question.type === 'essay' ? '—' : answerText(entry, layout, version, images);
   return `<div class="strip-line"><span class="strip-num">${entry.number}.</span><span class="strip-ans">${ans}</span></div>`;
 }

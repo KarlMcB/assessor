@@ -3,10 +3,14 @@
 
 import {
   ESSAY_KINDS, MAX_CHOICES, MIN_CHOICES, QUESTION_TYPES, TYPE_ORDER,
-  changeType, newChoice, newId, newQuestion, splitList,
+  changeType, newChoice, newId, newPair, newQuestion, splitList, MAX_MATCH,
 } from '../model.js';
 import { store } from '../store.js';
-import { questionBody, questionProblems, typeLabel } from '../question-view.js';
+import { questionBody, questionProblems, typeLabel, narrativeContext } from '../question-view.js';
+import { editNarrative, narrativeCard } from './narrative.js';
+import { narrativeOf } from '../model.js';
+import { GRAPH_TEMPLATE, NUMBERLINE_TEMPLATE } from '../graph.js';
+import { splitPastedQuestion } from '../import/text2qti.js';
 import { instantiate } from '../algo/engine.js';
 import { FUNCTIONS, CONSTANT_DOCS } from '../algo/functions.js';
 import { formatValue } from '../algo/values.js';
@@ -76,7 +80,12 @@ export function editorView(main, { container, questionId, newType }) {
           : null,
         field('Points', h('input.narrow', { type: 'number', min: 0, step: 'any', value: draft.points, oninput: (e) => { draft.points = e.target.value === '' ? 0 : Number(e.target.value); markDirty(); } })),
       ),
-      field('Question', richArea(draft.stem, (v) => (draft.stem = v), 5), 'Math: $F = ma$ inline, $$…$$ on its own line. **bold**, *italic*, ^sup^, ~sub~. Paste or drop an image. Algorithm values: [[m]] or [[= 2*m :: dp 1]].'),
+      field('Question', richArea(draft.stem, (v) => (draft.stem = v), 5, { 'data-stem': 'true' }), 'Math: $F = ma$ inline, $$…$$ on its own line. **bold**, *italic*, ^sup^, ~sub~. Paste or drop an image. Pasting a question with lettered choices fills in the choices too. Algorithm values: [[m]] or [[= 2*m :: dp 1]].'),
+      h('div.row.insert-row',
+        h('span.field-hint', 'Insert into the last text field used:'),
+        h('button', { onclick: () => insertBlock(GRAPH_TEMPLATE) }, 'Graph'),
+        h('button', { onclick: () => insertBlock(NUMBERLINE_TEMPLATE) }, 'Number line')),
+      narrativeField(),
       algorithmSection(),
       typeSection(),
       field('Rationale', richArea(draft.rationale, (v) => (draft.rationale = v), 2), 'Shown in answer keys when enabled.'),
@@ -106,6 +115,8 @@ export function editorView(main, { container, questionId, newType }) {
         );
       case 'num':
         return numericSection();
+      case 'match':
+        return matchSection();
       case 'essay':
         return h(
           'div',
@@ -170,6 +181,67 @@ export function editorView(main, { container, questionId, newType }) {
     );
   }
 
+  // Matching: items (numbered) each choose one lettered choice; extra choices are distractors.
+  function matchSection() {
+    const ABC = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const choicesEl = h('div.choices-edit');
+    const pairsEl = h('div.choices-edit');
+    const render = () => {
+      clear(choicesEl);
+      draft.choices.forEach((c, i) => add(choicesEl, h('div.choice-row.match-row',
+        h('span.choice-letter', ABC[i]),
+        richArea(c.text, (v) => (c.text = v), 1, { 'aria-label': `Choice ${ABC[i]}` }),
+        h('button.icon', {
+          title: 'Remove choice',
+          disabled: draft.choices.length <= 2,
+          onclick: () => {
+            draft.choices.splice(i, 1);
+            draft.pairs.forEach((p) => { if (p.choiceId === c.id) p.choiceId = null; });
+            markDirty();
+            render();
+          },
+        }, '✕'))));
+      clear(pairsEl);
+      draft.pairs.forEach((p, i) => add(pairsEl, h('div.choice-row.pair-row',
+        h('span.choice-letter', `${i + 1}.`),
+        richArea(p.prompt, (v) => (p.prompt = v), 1, { 'aria-label': `Item ${i + 1}` }),
+        select({ '': 'Answer…', ...Object.fromEntries(draft.choices.map((c, k) => [c.id, ABC[k]])) }, p.choiceId ?? '', {
+          'aria-label': `Answer for item ${i + 1}`,
+          onchange: (e) => { p.choiceId = e.target.value || null; markDirty(); },
+        }),
+        h('button.icon', {
+          title: 'Remove item',
+          disabled: draft.pairs.length <= 1,
+          onclick: () => { draft.pairs.splice(i, 1); markDirty(); render(); },
+        }, '✕'))));
+    };
+    render();
+    return h('div.match-edit',
+      h('span.field-label', 'Items to match (each picks a lettered choice)'),
+      pairsEl,
+      h('div.row', h('button', {
+        onclick: () => {
+          if (draft.pairs.length >= MAX_MATCH) return toast(`At most ${MAX_MATCH} items`);
+          draft.pairs.push(newPair());
+          markDirty();
+          render();
+        },
+      }, '+ Add item')),
+      h('span.field-label', 'Choices (extra ones act as distractors)'),
+      choicesEl,
+      h('div.row',
+        h('button', {
+          onclick: () => {
+            if (draft.choices.length >= MAX_MATCH) return toast(`At most ${MAX_MATCH} choices`);
+            draft.choices.push({ id: newId(), text: '' });
+            markDirty();
+            render();
+          },
+        }, '+ Add choice'),
+        field('Columns', select({ 1: '1', 2: '2', 3: '3' }, draft.columns, { onchange: (e) => { draft.columns = Number(e.target.value); markDirty(); } }))),
+    );
+  }
+
   function numericSection() {
     const a = draft.answer;
     return h(
@@ -221,6 +293,36 @@ export function editorView(main, { container, questionId, newType }) {
     const values = new Set(extra);
     for (const b of store.lib.banks) for (const q of b.questions) if (q.meta[key]) values.add(q.meta[key]);
     return h('datalist', { id }, [...values].sort().map((v) => h('option', { value: v })));
+  }
+
+  // ---- narrative ---------------------------------------------------------------
+
+  function narrativeField() {
+    const owner = container.owner;
+    const list = owner.narratives || [];
+    return h('div.row',
+      field('Narrative', select({ '': 'None', ...Object.fromEntries(list.map((n) => [n.id, n.title])) }, draft.narrativeId ?? '', {
+        onchange: (e) => { draft.narrativeId = e.target.value || null; markDirty(); },
+      }), list.length ? 'Shared passage printed before this question; its algorithm variables are available here.' : null),
+      h('button', {
+        title: 'Create a narrative and link this question to it',
+        onclick: async () => {
+          const before = new Set((owner.narratives || []).map((n) => n.id));
+          await editNarrative(owner);
+          const created = (owner.narratives || []).find((n) => !before.has(n.id));
+          if (created) { draft.narrativeId = created.id; markDirty(); renderForm(); }
+        },
+      }, '+ New narrative'));
+  }
+
+  function insertBlock(text) {
+    const target = lastField && form.contains(lastField) && lastField.tagName === 'TEXTAREA' ? lastField : form.querySelector('textarea');
+    const before = target.value.slice(0, target.selectionStart ?? target.value.length);
+    insertAtCursor(target, `${before && !before.endsWith('\n') ? '\n\n' : ''}${text}\n`);
+  }
+
+  function currentNarrative() {
+    return narrativeOf(container.owner, draft);
   }
 
   // ---- algorithm ---------------------------------------------------------------
@@ -308,7 +410,22 @@ export function editorView(main, { container, questionId, newType }) {
       oninput: (e) => { set(e.target.value); markDirty(); },
       onpaste: (e) => {
         const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
-        if (file) { e.preventDefault(); addImage(ta, file); }
+        if (file) { e.preventDefault(); addImage(ta, file); return; }
+        // Smart paste: a whole multiple-choice question pasted into an empty question field.
+        if (attrs['data-stem'] && QUESTION_TYPES[draft.type].choices && !ta.value.trim()) {
+          const split = splitPastedQuestion(e.clipboardData?.getData('text/plain') || '');
+          if (!split) return;
+          e.preventDefault();
+          draft.stem = split.stem;
+          draft.choices = split.choices.slice(0, MAX_CHOICES).map((c) => ({ ...newChoice(c.text), correct: c.correct }));
+          if (draft.type === 'mc') {
+            let seen = false;
+            for (const c of draft.choices) { if (c.correct && !seen) seen = true; else c.correct = false; }
+          }
+          markDirty();
+          renderForm();
+          toast(`Split into the question and ${draft.choices.length} choices`);
+        }
       },
       ondrop: (e) => {
         const file = [...(e.dataTransfer?.files || [])].find((f) => f.type.startsWith('image/'));
@@ -333,17 +450,21 @@ export function editorView(main, { container, questionId, newType }) {
 
   function updatePreview() {
     const seed = previewSeed();
+    const n = currentNarrative();
+    const nctx = narrativeContext(n, n && container.narrativeSeed(n));
     add(clear(preview), 
       h('div.q-card-head', h('span.badge', typeLabel(draft)), h('span.muted', `${draft.points} pt${Number(draft.points) === 1 ? '' : 's'}`)),
-      ...questionBody(draft, store.lib.images, { seed }),
+      n ? narrativeCard(n, store.lib.images, container.narrativeSeed(n)) : null,
+      ...questionBody(draft, store.lib.images, { seed, narrative: nctx }),
     );
-    renderValues(instantiate(draft, { seed }));
-    const problems = questionProblems(draft, seed);
+    renderValues(instantiate(draft, { seed, narrative: nctx }));
+    const problems = questionProblems(draft, seed, nctx);
     add(clear(problemsEl), ...problems.map((p) => h('li', p)));
   }
 
   function save(andNew, extra = null) {
-    const problems = questionProblems(draft, container.seed(draft));
+    const n = currentNarrative();
+    const problems = questionProblems(draft, container.seed(draft), narrativeContext(n, n && container.narrativeSeed(n)));
     if (problems.length && !confirm(`This question isn’t complete:\n\n• ${problems.join('\n• ')}\n\nSave anyway?`)) return;
     draft.modified = new Date().toISOString();
     container.save(draft);

@@ -4,13 +4,14 @@ import { TYPE_ORDER, duplicateQuestion, newId, normalizeQuestion, now } from './
 
 export function newTest(title = 'Untitled test') {
   const t = now();
-  return { id: newId(), title, items: [], mixTypes: false, typeOrder: [...TYPE_ORDER], seed: newId(), created: t, modified: t };
+  return { id: newId(), title, items: [], narratives: [], mixTypes: false, typeOrder: [...TYPE_ORDER], seed: newId(), created: t, modified: t };
 }
 
 export function normalizeTest(t) {
   const test = { ...newTest(), ...t };
   test.typeOrder = [...new Set([...(t.typeOrder || []), ...TYPE_ORDER])].filter((x) => TYPE_ORDER.includes(x));
   test.items = (t.items || []).map((item) => ({ ...item, question: normalizeQuestion(item.question) }));
+  test.narratives = t.narratives || [];
   return test;
 }
 
@@ -19,14 +20,37 @@ export function testItem(bankId, q) {
   return { question: duplicateQuestion(q), sourceBankId: bankId, sourceQuestionId: q.id };
 }
 
+// Questions sharing a narrative stay together: later ones move up behind the first,
+// within the same type group when types aren't mixed.
+export function keepNarrativesTogether(items, grouped) {
+  const out = [];
+  const placed = new Set();
+  items.forEach((it, i) => {
+    if (placed.has(it)) return;
+    out.push(it);
+    placed.add(it);
+    const n = it.question.narrativeId;
+    if (!n) return;
+    for (let j = i + 1; j < items.length; j++) {
+      const other = items[j];
+      if (!placed.has(other) && other.question.narrativeId === n && (!grouped || other.question.type === it.question.type)) {
+        out.push(other);
+        placed.add(other);
+      }
+    }
+  });
+  return out;
+}
+
 // Items in the order they appear: by type group (in typeOrder) unless types are mixed.
 export function displayOrder(test) {
-  if (test.mixTypes) return test.items.slice();
+  if (test.mixTypes) return keepNarrativesTogether(test.items, false);
   const rank = new Map(test.typeOrder.map((t, i) => [t, i]));
-  return test.items
+  const sorted = test.items
     .map((item, i) => ({ item, i }))
     .sort((a, b) => (rank.get(a.item.question.type) ?? 99) - (rank.get(b.item.question.type) ?? 99) || a.i - b.i)
     .map((x) => x.item);
+  return keepNarrativesTogether(sorted, true);
 }
 
 export function typeGroups(test) {
@@ -72,7 +96,13 @@ export function pool(lib, test, bankIds) {
 }
 
 export function addToTest(test, entries) {
-  for (const { bank, q } of entries) test.items.push(testItem(bank.id, q));
+  test.narratives ??= [];
+  for (const { bank, q } of entries) {
+    test.items.push(testItem(bank.id, q));
+    // Bring the question's narrative along (once).
+    const n = q.narrativeId && bank.narratives?.find((x) => x.id === q.narrativeId);
+    if (n && !test.narratives.some((x) => x.id === n.id)) test.narratives.push(structuredClone(n));
+  }
   test.modified = now();
 }
 

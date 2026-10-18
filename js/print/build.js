@@ -4,7 +4,7 @@
 import { FONTS, PAPER, LETTERS, normalizeLayout, normalizePrint } from './layout.js';
 import { buildVersions, versionMap } from './versions.js';
 import {
-  forcedWide, headerHtml, keyEntry, keySectionHeading, questionBlock, sectionHeading, stripLine, versionMapTable,
+  forcedWide, headerHtml, keyEntry, narrativeBlock, keySectionHeading, questionBlock, sectionHeading, stripLine, versionMapTable,
 } from './render.js';
 
 const today = () => new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
@@ -39,7 +39,16 @@ export function buildFlows(lib, test, layoutIn, optsIn) {
     v.sections.forEach((section, si) => {
       section.items.forEach((entry, k) => {
         const heading = k === 0 ? sectionHeading(section, layout) : '';
-        const html = heading + questionBlock(entry, { layout, images: lib.images, version: v.letter, columns: layout.columns });
+        // Narrative before the first question of each run that uses it.
+        let narrativeHtml = '';
+        const nid = entry.narrative?.id;
+        if (nid && section.items[k - 1]?.narrative?.id !== nid) {
+          let end = k;
+          while (section.items[end + 1]?.narrative?.id === nid) end++;
+          const last = section.items[end];
+          narrativeHtml = narrativeBlock(entry.narrative, entry.number, last.number + (last.count ?? 1) - 1, { images: lib.images, version: v.letter });
+        }
+        const html = heading + narrativeHtml + questionBlock(entry, { layout, images: lib.images, version: v.letter, columns: layout.columns });
         blocks.push({ html, wide: forcedWide(entry.question), section: si });
       });
     });

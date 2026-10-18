@@ -123,7 +123,7 @@ export default {
     addToTest(test, [{ bank, q: bank.questions[0] }]);
     const back = normalizeLibrary(JSON.parse(JSON.stringify(lib)));
     eq(back.tests[0].items[0].question.stem, 'mc1');
-    eq(back.tests[0].typeOrder.length, 5);
+    eq(back.tests[0].typeOrder.length, 6);
   },
 
   // ---- search syntax

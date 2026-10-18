@@ -6,7 +6,9 @@
 // fill-in-the-blank (short_answer_question) and hand-built matching items.
 
 import { renderInline, renderRich } from '../richtext.js';
-import { instantiate, isDynamic } from '../algo/engine.js';
+import { instantiate, isDynamic, narrativeRun, resolvePlaceholder } from '../algo/engine.js';
+import { narrativeOf } from '../model.js';
+import { narrativeFor } from '../print/versions.js';
 import { displayOrder } from '../testmodel.js';
 import { testSeed } from '../containers.js';
 import { makeZip, dataUrlToBytes } from './zip.js';
@@ -44,16 +46,30 @@ export function numericAnswers(q, inst) {
 }
 
 // One QTI <item>. ctx: { images: id -> url, feedback: bool }
-export function qtiItem(q, { seed, version = 'A', ctx }) {
-  const inst = instantiate(q, { seed, version });
+export function qtiItem(q, { seed, version = 'A', narrative = null, ctx }) {
+  const inst = instantiate(q, { seed, version, narrative });
   const resolve = inst.dynamic ? inst.resolve : null;
-  const opts = { mathml: true };
+  // Graphs go in the package as SVG image files.
+  const opts = {
+    mathml: true,
+    graph: (svg) => {
+      const name = `graph_${randomHex(12)}.svg`;
+      ctx.graphFiles?.set(name, svg);
+      return `<img src="%24IMS-CC-FILEBASE%24/images/${name}" alt="graph">`;
+    },
+  };
   const rich = (s) => renderRich(s, ctx.images, resolve, opts);
   const choiceHtml = (s) => `<p>${renderInline(s, ctx.images, resolve, opts)}</p>`;
   const ident = `assessor_question_${randomHex()}`;
   const ref = `assessor_question_ref_${randomHex()}`;
   const points = Number(q.points) || 0;
-  const stem = rich(q.stem) || '<p></p>';
+  // Schoology has no shared passages, so the narrative goes in front of each question.
+  let narrativeHtml = '';
+  if (narrative) {
+    const r = narrativeRun(narrative, version);
+    narrativeHtml = renderRich(narrative.body, ctx.images, narrative.algorithm?.trim() ? Object.assign((c) => resolvePlaceholder(r, c), { run: r }) : null, opts);
+  }
+  const stem = narrativeHtml + (rich(q.stem) || '<p></p>');
 
   let feedbackHtml = ctx.feedback && q.rationale?.trim() ? rich(q.rationale) : '';
   if (q.type === 'essay' && ctx.feedback && q.answer.model?.trim()) {
@@ -85,6 +101,24 @@ export function qtiItem(q, { seed, version = 'A', ctx }) {
     return `<item ident="${ident}" title="Question">${metadata(type, points, ids, ref)}<presentation><material>${mattext(stem)}</material><response_lid ident="response1" rcardinality="${multi ? 'Multiple' : 'Single'}"><render_choice>${labels}</render_choice></response_lid></presentation><resprocessing>${outcomes}${fbCond}${scoring}</resprocessing>${fbBlock}</item>`;
   }
 
+  if (q.type === 'match') {
+    // Shape verified in Schoology (schoology-tests/build_matching_fib_tests.py).
+    const promptIds = q.pairs.map(() => randomHex());
+    const choiceIds = q.choices.map(() => randomHex());
+    const text = (s) => {
+      const html = renderInline(s, ctx.images, resolve, opts);
+      return /[<&]/.test(html) ? mattext(html) : `<mattext texttype="text/plain">${x(s)}</mattext>`;
+    };
+    const choicesXml = q.choices.map((c, i) => `<response_label ident="${choiceIds[i]}"><material>${text(c.text)}</material></response_label>`).join('');
+    const lids = q.pairs.map((p, i) => `<response_lid ident="response_${promptIds[i]}"><material>${text(p.prompt)}</material><render_choice>${choicesXml}</render_choice></response_lid>`).join('');
+    const share = (100 / Math.max(1, q.pairs.length)).toFixed(2);
+    const conds = q.pairs.map((p, i) => {
+      const k = q.choices.findIndex((c) => c.id === p.choiceId);
+      return k === -1 ? '' : `<respcondition><conditionvar><varequal respident="response_${promptIds[i]}">${choiceIds[k]}</varequal></conditionvar><setvar varname="SCORE" action="Add">${share}</setvar></respcondition>`;
+    }).join('');
+    return `<item ident="${ident}" title="Question">${metadata('matching_question', points, promptIds, ref)}<presentation><material>${mattext(stem)}</material>${lids}</presentation><resprocessing>${outcomes}${fbCond}${conds}</resprocessing>${fbBlock}</item>`;
+  }
+
   if (q.type === 'num') {
     const answers = numericAnswers(q, inst);
     const ids = answers.map(() => `assessor_choice_${randomHex()}`);
@@ -105,8 +139,10 @@ function groupSection(itemsXml, points) {
 export function buildPackage(lib, title, entries, { feedback = true } = {}) {
   const assessmentId = `assessor_assessment_${randomHex(32)}`;
   const images = new Map(); // image id -> file name
+  const graphFiles = new Map();
   const ctx = {
     feedback,
+    graphFiles,
     images: (id) => {
       const data = lib.images[id];
       if (!data) return '';
@@ -122,10 +158,10 @@ export function buildPackage(lib, title, entries, { feedback = true } = {}) {
   const body = entries.map((e) => {
     if (e.group) {
       total += e.points;
-      return groupSection(e.group.map((g) => qtiItem(g.question, { seed: g.seed, version: g.version, ctx })), e.points);
+      return groupSection(e.group.map((g) => qtiItem(g.question, { seed: g.seed, version: g.version, narrative: g.narrative, ctx })), e.points);
     }
     total += Number(e.question.points) || 0;
-    return qtiItem(e.question, { seed: e.seed, version: e.version, ctx });
+    return qtiItem(e.question, { seed: e.seed, version: e.version, narrative: e.narrative, ctx });
   }).join('');
 
   const assessment = `<?xml version="1.0" encoding="UTF-8"?>
@@ -204,7 +240,7 @@ export function buildPackage(lib, title, entries, { feedback = true } = {}) {
 </quiz>
 `;
 
-  const imageResources = [...images.values()]
+  const imageResources = [...images.values(), ...graphFiles.keys()]
     .map((name) => `    <resource identifier="assessor_image_${randomHex()}" type="webcontent" href="images/${name}">\n      <file href="images/${name}"/>\n    </resource>`)
     .join('\n');
   const dependencyId = `assessor_dependency_${assessmentId.slice(-32)}`;
@@ -248,6 +284,7 @@ ${imageResources}
     { name: `${assessmentId}/assessment_meta.xml`, data: meta },
     { name: `${assessmentId}/${assessmentId}.xml`, data: assessment },
     ...[...images].map(([id, name]) => ({ name: `images/${name}`, data: dataUrlToBytes(lib.images[id]).bytes })),
+    ...[...graphFiles].map(([name, svg]) => ({ name: `images/${name}`, data: `<?xml version="1.0" encoding="UTF-8"?>\n${svg}` })),
   ];
   return { files, assessment, manifest, meta, points: total };
 }
@@ -259,19 +296,23 @@ export function testEntries(test, { mode = 'fixed', version = 'A', poolSize = 5 
   return displayOrder(test).map((item) => {
     const q = item.question;
     if (mode === 'pool' && isDynamic(q)) {
-      const group = Array.from({ length: poolSize }, (_, k) => ({ question: q, seed: testSeed(test, q, `pool${k + 1}`), version }));
+      const group = Array.from({ length: poolSize }, (_, k) => ({ question: q, seed: testSeed(test, q, `pool${k + 1}`), version, narrative: narrativeFor(test, q, `pool${k + 1}`) }));
       return { group, points: Number(q.points) || 0 };
     }
-    return { question: q, seed: testSeed(test, q, version), version };
+    return { question: q, seed: testSeed(test, q, version), version, narrative: narrativeFor(test, q, version) };
   });
 }
 
 export function bankEntries(bank, { mode = 'fixed', poolSize = 5 } = {}) {
+  const narr = (q, key) => {
+    const n = narrativeOf(bank, q);
+    return n ? { ...n, seed: key === 'A' ? n.id : `${key}|${n.id}` } : null;
+  };
   return bank.questions.filter((q) => !q.flags.doNotUse).map((q) => {
     if (mode === 'pool' && isDynamic(q)) {
-      return { group: Array.from({ length: poolSize }, (_, k) => ({ question: q, seed: `${q.id}|pool${k + 1}`, version: 'A' })), points: Number(q.points) || 0 };
+      return { group: Array.from({ length: poolSize }, (_, k) => ({ question: q, seed: `${q.id}|pool${k + 1}`, version: 'A', narrative: narr(q, `pool${k + 1}`) })), points: Number(q.points) || 0 };
     }
-    return { question: q, seed: q.id, version: 'A' };
+    return { question: q, seed: q.id, version: 'A', narrative: narr(q, 'A') };
   });
 }
 

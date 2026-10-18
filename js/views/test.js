@@ -10,6 +10,9 @@ import { store } from '../store.js';
 import { questionBody, questionProblems, metaChips, typeLabel } from '../question-view.js';
 import { isDynamic } from '../algo/engine.js';
 import { exportDialog } from './export.js';
+import { narrativesPanel, narrativeCard } from './narrative.js';
+import { narrativeFor } from '../print/versions.js';
+import { narrativeOf } from '../model.js';
 import { h, add, clear, select, toast, openDialog } from '../ui.js';
 
 export const SELECT_METHODS = {
@@ -86,6 +89,7 @@ export function testView(main, { testId, focus }) {
     const n = test.items.length;
     countEl.textContent = `${n} question${n === 1 ? '' : 's'} · ${totalPoints(test)} point${totalPoints(test) === 1 ? '' : 's'}`;
     clear(list);
+    if (test.narratives?.length) add(list, narrativesPanel(test, test.items.map((it) => it.question)));
     if (!n) {
       list.append(h('div.empty', h('p', 'No questions yet. Use “Add questions” above to pick from your banks, or write one just for this test.')));
       return;
@@ -107,7 +111,15 @@ export function testView(main, { testId, focus }) {
           ),
         );
       }
-      for (const item of g.items) list.append(card(item, ++number));
+      let prevNarrative = null;
+      for (const item of g.items) {
+        const n = narrativeOf(test, item.question);
+        if (n && n.id !== prevNarrative) list.append(narrativeCard(n, store.lib.images, narrativeFor(test, item.question, 'A').seed));
+        prevNarrative = n?.id ?? null;
+        const count = item.question.type === 'match' ? Math.max(1, item.question.pairs.length) : 1;
+        list.append(card(item, count > 1 ? `${number + 1}–${number + count}` : number + 1));
+        number += count;
+      }
     });
     if (focus) {
       const el = list.querySelector(`[data-qid="${focus}"]`);
@@ -122,7 +134,8 @@ export function testView(main, { testId, focus }) {
   function card(item, number) {
     const q = item.question;
     const seed = testSeed(test, q);
-    const problems = questionProblems(q, seed);
+    const narrative = narrativeFor(test, q, 'A');
+    const problems = questionProblems(q, seed, narrative);
     const src = sourceOf(store.lib, item);
     const edited = src && differsFromSource(store.lib, item);
     const editHref = `#/test/${test.id}/q/${q.id}`;
@@ -148,7 +161,7 @@ export function testView(main, { testId, focus }) {
           h('button.danger', { onclick: () => remove(item) }, 'Remove'),
         ),
       ),
-      h('div.q-card-body', questionBody(q, store.lib.images, { showAnswer: viewState.answers, showRationale: viewState.answers, seed })),
+      h('div.q-card-body', questionBody(q, store.lib.images, { showAnswer: viewState.answers, showRationale: viewState.answers, seed, narrative })),
       metaChips(q).length ? h('footer.q-meta', metaChips(q)) : null,
     );
     addDragHandlers(el, item);

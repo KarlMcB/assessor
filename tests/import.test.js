@@ -92,9 +92,4 @@ export default {
     eq(pool.banks[0].questions.length, 6);
     eq(pool.notes.groups, 1);
   },
-  async 'matching is reported as skipped'() {
-    const r = await readCartridge(await fetchBlob('schoology-tests/matching_test.zip'), settings);
-    eq(r.skipped.length, 4);
-    ok(r.skipped.every((s) => s.reason === 'Matching'));
-  },
 };

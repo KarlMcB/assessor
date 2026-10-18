@@ -5,12 +5,14 @@
 //   $inline math$  $$display math$$  \$ for a literal dollar sign
 //   ![alt](img:ID) or ![alt](img:ID|300) for an image 300 px wide; ![alt](https://…) for a web image
 //   [[name]] or [[= expression :: format]] algorithm value, also inside math
+//   ```graph … ``` and ```numberline … ``` blocks (see graph.js)
 //
 // Blank lines separate paragraphs; single newlines become line breaks.
 // `resolve(content)` turns a placeholder into { latex, text } or { error };
 // without it, placeholders show as chips.
 
 import katex from '../vendor/katex/katex.mjs';
+import { graphSvg } from './graph.js';
 
 const OPEN = '\u0001';
 const CLOSE = '\u0002';
@@ -156,7 +158,17 @@ function blocks(text, images) {
 export function renderRich(src, images = {}, resolve = null, opts = {}) {
   if (!src) return '';
   const slots = [];
-  const protectedText = protect(String(src).replace(/\r\n?/g, '\n'), slots, resolve, Boolean(opts.mathml));
+  // Graph blocks become SVG before anything else touches their text.
+  const withGraphs = String(src).replace(/\r\n?/g, '\n').replace(/```(graph|numberline)[ \t]*\n([\s\S]*?)```/g, (_, kind, body) => {
+    const source = body.replace(/\[\[(.+?)\]\]/g, (m, c) => {
+      const r = resolve?.(c);
+      return r && !r.error && r.text !== null ? `(${r.text.replace(/\u2212/g, '-').replace(/,/g, '')})` : m;
+    });
+    const svg = graphSvg(kind, source, resolve?.run);
+    const html = opts.graph ? opts.graph(svg) : `<span class="graph-wrap">${svg}</span>`;
+    return `\n\n${OPEN}${slots.push(html) - 1}${CLOSE}\n\n`;
+  });
+  const protectedText = protect(withGraphs, slots, resolve, Boolean(opts.mathml));
   return restore(blocks(escapeHtml(protectedText), images), slots);
 }
 

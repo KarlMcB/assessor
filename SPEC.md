@@ -321,6 +321,16 @@ Export a whole bank, or filtered questions, as a Schoology question bank.
 
 ---
 
+## 13a. M6 as built
+- **Matching** is one question with numbered items and lettered choices (extra choices are distractors), rather than ExamView's separate matching group of single questions. Each item takes its own number on paper and in the key; it exports as one Schoology `matching_question`.
+- **Narratives** belong to a bank (tests keep copies). A narrative's algorithm variables are available to every linked question. Linked questions stay together when reordering or scrambling and the narrative prints once ("Use the following to answer questions 6–7"). Schoology has no shared passages, so exports repeat the narrative in each question.
+- **Graphs** are written in question text as fenced blocks:
+  - ```` ```graph ````: lines like `x: -10 to 10 step 1`, `size: 3 x 2`, `labels: t (s), v (m/s)`, `f(x) = v0 + a*x ; domain 0 to 4 ; color red`, `y <= x^2 - 4` (shaded), `point (2, 3) "A" ; open`, `segment (0, 0) to (3, 4)`, `text (1, 2) "label"`.
+  - ```` ```numberline ````: `range: -5 to 5 step 1`, `point 2 open "A"`, `segment -1 to 3 closed open`, `ray 2 right open`.
+  - Every number can use the question's (or narrative's) algorithm variables. Graphs print as SVG and export to Schoology as SVG image files; whether Schoology shows SVG images is unverified.
+- **text2qti import** reads the standard syntax plus assessor-only lines: `meta: topic = …; difficulty = …; standards = A, B`, `rationale: …`, `unit: m/s`, `algorithm:` followed by indented definitions, and `match: Item = Choice` / `distractor: Choice` for matching. Image files picked together with the text file are matched by name.
+- **Smart paste:** pasting a whole multiple-choice question into an empty question field splits off the choices (`*` marks the correct one).
+
 ## 14. Open decisions
 Decided: GitHub Pages from a public repo (§2); drop Bimodal and Completion, keep Matching (§4); Cartesian graphs and number lines (§9); text2qti syntax for plain-text import, with short-answer questions imported as Essay (§5).
 

@@ -4,6 +4,7 @@ export const DEFAULT_INSTRUCTIONS = {
   tf: 'Indicate whether each statement is true or false.',
   mc: 'Identify the choice that best completes the statement or answers the question.',
   mr: 'Identify one or more choices that best complete the statement or answer the question.',
+  match: 'Match each item with the correct choice. Write the letter in the blank.',
   num: 'Write the answer in the space provided. Include units where needed.',
   essay: 'Answer each question in the space provided. Show your work.',
 };
@@ -97,7 +98,7 @@ export function choiceKey(i, number, layout) {
 
 // Alternating letters only make sense with up to 5 choices.
 export function alternationAllowed(questions) {
-  return questions.every((q) => !q.choices || q.choices.length <= 5);
+  return questions.every((q) => q.type === 'match' || !q.choices || q.choices.length <= 5);
 }
 
 export function fillTokens(text, values) {

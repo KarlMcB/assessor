@@ -7,6 +7,8 @@ import { store } from './store.js';
 export function bankContainer(bank) {
   return {
     kind: 'bank',
+    owner: bank,
+    narrativeSeed: (n) => n.id,
     title: bank.title,
     backHref: (focus) => `#/bank/${bank.id}${focus ? `?focus=${focus}` : ''}`,
     newHref: (type) => `#/bank/${bank.id}/new/${type}?t=${Date.now()}`,
@@ -33,6 +35,8 @@ export function testContainer(test) {
   const itemFor = (id) => test.items.find((it) => it.question.id === id);
   return {
     kind: 'test',
+    owner: test,
+    narrativeSeed: (n) => `${test.seed}|A|${n.id}`,
     title: test.title,
     backHref: (focus) => `#/test/${test.id}${focus ? `?focus=${focus}` : ''}`,
     newHref: (type) => `#/test/${test.id}/new/${type}?t=${Date.now()}`,
