@@ -102,8 +102,8 @@ TestItem { question: Question (a copy), sourceBankId, sourceQuestionId }
 | **Multiple Choice** | one correct choice | lettered choices, 1–5 columns | `multiple_choice_question` | 2–8 choices |
 | **Multiple Response** | 1+ correct choices | same | `multiple_answers_question` | |
 | **True/False** | true/false | T / F (or as choices) | `true_false_question` | |
-| **Numeric Response** | number + tolerance (absolute or %) or exact match | answer blank | Schoology has no numeric type: exported as a fill-in-the-blank (`short_answer_question`) with a list of accepted forms (e.g. `25`, `25.0`, `25 J`) **[verify]** | Tolerance is used for printing and keys only; it can't carry over to Schoology |
-| **Matching** | question → choice letter | instruction, choice list, questions with blanks | `matching_question` **[verify]** | Up to 26 per group |
+| **Numeric Response** | number + tolerance (absolute or %) or exact match | answer blank | Schoology has no numeric type: exported as a fill-in-the-blank (`short_answer_question`) with a list of accepted forms (e.g. `25`, `25.0`, `25 J`) (verified) | Tolerance is used for printing and keys only; it can't carry over to Schoology |
+| **Matching** | question → choice letter | instruction, choice list, questions with blanks | `matching_question` (verified) | Up to 26 per group |
 | **Short Answer / Problem / Essay** | model answer (rich text) | answer space or lines | `essay_question` | Three labels, same behavior; they differ in default instructions and answer space |
 
 Decided: Bimodal and Completion are dropped. Also left out from ExamView: Modified True/False, Yes/No, Case, Other.
@@ -320,7 +320,9 @@ Decided: GitHub Pages from a public repo (§2); drop Bimodal and Completion, kee
 
 Schoology facts so far: no numeric question type (numeric exports as fill-in-the-blank); a native matching type exists; MathML renders in imported questions, so math exports as MathML.
 
-Still open (to verify, not decide):
-1. **MathML coverage:** import `schoology-tests/mathml_test.zip` and confirm every construct renders: display equations, roots, vectors, sums, units, `<` signs, and math in answer choices (§11.2).
-2. **Matching import:** Schoology has a matching type, but the earlier text2qti notes say matching couldn't be imported and had to be built by hand. Test a hand-built `matching_question` item before relying on it.
-3. **Fill-in-the-blank import:** confirm `short_answer_question` items arrive auto-graded with all accepted answers.
+Verified by test imports (October 2026), all working:
+1. **MathML** in question text and answer choices (`schoology-tests/mathml_test.zip`).
+2. **Matching:** hand-built Canvas-style `matching_question` items import and grade, including distractor choices and MathML in prompts and choices (`schoology-tests/matching_test.zip`). This replaces the earlier note that matching had to be built by hand in Schoology.
+3. **Fill-in-the-blank:** text2qti-style `short_answer_question` items import auto-graded with their accepted answers (`schoology-tests/fill_in_blank_test.zip`).
+
+The three build scripts in `schoology-tests/` are the reference output for the M5 exporter.
