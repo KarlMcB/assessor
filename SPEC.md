@@ -102,7 +102,7 @@ TestItem { question: Question (a copy), sourceBankId, sourceQuestionId }
 | **Multiple Choice** | one correct choice | lettered choices, 1–5 columns | `multiple_choice_question` | 2–8 choices |
 | **Multiple Response** | 1+ correct choices | same | `multiple_answers_question` | |
 | **True/False** | true/false | T / F (or as choices) | `true_false_question` | |
-| **Numeric Response** | number + tolerance (absolute or %) or exact match | answer blank | `numerical_question` **[verify in Schoology]** | Tolerance is new (ExamView only had exact or loose matching); important for physics |
+| **Numeric Response** | number + tolerance (absolute or %) or exact match | answer blank | Schoology has no numeric type: exported as a fill-in-the-blank (`short_answer_question`) with a list of accepted forms (e.g. `25`, `25.0`, `25 J`) **[verify]** | Tolerance is used for printing and keys only; it can't carry over to Schoology |
 | **Matching** | question → choice letter | instruction, choice list, questions with blanks | `matching_question` **[verify]** | Up to 26 per group |
 | **Short Answer / Problem / Essay** | model answer (rich text) | answer space or lines | `essay_question` | Three labels, same behavior; they differ in default instructions and answer space |
 
@@ -280,7 +280,7 @@ Printing uses Safari's print dialog, so **Save as PDF** comes free. The app buil
 ### 11.2 Content mapping
 - Question types: see the §4 table. Rationale becomes general feedback, points become points.
 - Narratives are prepended to each linked question (Schoology has no shared-passage concept).
-- **Math [verify]:** Schoology may not render LaTeX. Options, in order of preference: (1) render each formula to an image embedded in the zip; (2) MathML; (3) plain-text fallback. Needs a test import.
+- **Math (decided): MathML.** A test import confirmed Schoology renders MathML in questions. Questions are still written in LaTeX; on export each formula is converted to presentation MathML (KaTeX's MathML output, without the LaTeX annotation). `schoology-tests/build_mathml_test.py` builds the reference quiz for comparison.
 - **Images:** packaged in the zip and referenced relatively.
 
 ### 11.3 Algorithmic questions in Schoology
@@ -318,5 +318,9 @@ Export a whole bank, or filtered questions, as a Schoology question bank.
 ## 14. Open decisions
 Decided: GitHub Pages from a public repo (§2); drop Bimodal and Completion, keep Matching (§4); Cartesian graphs and number lines (§9); text2qti syntax for plain-text import, with short-answer questions imported as Essay (§5).
 
+Schoology facts so far: no numeric question type (numeric exports as fill-in-the-blank); a native matching type exists; MathML renders in imported questions, so math exports as MathML.
+
 Still open (to verify, not decide):
-1. **Schoology checks:** confirm numerical and matching question types, and how math renders, with a test import (§4, §11.2). Matching can't be checked against text2qti output, since text2qti doesn't support it.
+1. **MathML coverage:** import `schoology-tests/mathml_test.zip` and confirm every construct renders: display equations, roots, vectors, sums, units, `<` signs, and math in answer choices (§11.2).
+2. **Matching import:** Schoology has a matching type, but the earlier text2qti notes say matching couldn't be imported and had to be built by hand. Test a hand-built `matching_question` item before relying on it.
+3. **Fill-in-the-blank import:** confirm `short_answer_question` items arrive auto-graded with all accepted answers.
