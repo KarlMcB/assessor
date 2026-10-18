@@ -3,7 +3,7 @@
 //   **bold**  *italic*  ^superscript^  ~subscript~
 //   - bullet / 1. numbered lists, | pipe | tables |
 //   $inline math$  $$display math$$  \$ for a literal dollar sign
-//   ![alt](img:ID) or ![alt](img:ID|300) for an image 300 px wide
+//   ![alt](img:ID) or ![alt](img:ID|300) for an image 300 px wide; ![alt](https://…) for a web image
 //   [[name]] or [[= expression :: format]] algorithm value, also inside math
 //
 // Blank lines separate paragraphs; single newlines become line breaks.
@@ -19,8 +19,19 @@ export function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-export function renderMath(tex, displayMode) {
+export function renderMath(tex, displayMode, mathml = false) {
+  if (mathml) return mathmlOnly(tex, displayMode);
   return katex.renderToString(tex, { displayMode, throwOnError: false, strict: 'ignore', output: 'htmlAndMathml' });
+}
+
+// Plain presentation MathML (no KaTeX wrapper or LaTeX annotation), for export.
+export function mathmlOnly(tex, displayMode) {
+  const html = katex.renderToString(tex, { displayMode, throwOnError: false, strict: 'ignore', output: 'mathml' });
+  const m = html.match(/<math[\s\S]*<\/math>/);
+  if (!m) return escapeHtml(tex);
+  return m[0]
+    .replace(/<annotation[\s\S]*?<\/annotation>/g, '')
+    .replace(/<\/?semantics>/g, '');
 }
 
 // Replace placeholders inside a LaTeX formula with their LaTeX values.
@@ -32,15 +43,15 @@ function substituteMath(tex, resolve) {
   });
 }
 
-function placeholderHtml(content, resolve) {
+function placeholderHtml(content, resolve, mathml) {
   if (!resolve) return `<span class="var-chip" title="Algorithm value">${escapeHtml(content.trim())}</span>`;
   const r = resolve(content);
   if (r.error) return `<span class="var-error" title="${escapeHtml(r.error)}">[[${escapeHtml(content)}]]</span>`;
-  return r.text !== null ? escapeHtml(r.text) : renderMath(r.latex, false);
+  return r.text !== null ? escapeHtml(r.text) : renderMath(r.latex, false, mathml);
 }
 
 // Pull math and placeholders out first so Markdown rules never touch them.
-function protect(src, slots, resolve) {
+function protect(src, slots, resolve, mathml) {
   const keep = (html) => `${OPEN}${slots.push(html) - 1}${CLOSE}`;
   let out = '';
   let i = 0;
@@ -51,18 +62,19 @@ function protect(src, slots, resolve) {
     } else if (src.startsWith('$$', i)) {
       const end = src.indexOf('$$', i + 2);
       if (end === -1) { out += src.slice(i); break; }
-      out += keep(`<div class="math-display">${renderMath(substituteMath(src.slice(i + 2, end), resolve), true)}</div>`);
+      const display = renderMath(substituteMath(src.slice(i + 2, end), resolve), true, mathml);
+      out += keep(mathml ? display : `<div class="math-display">${display}</div>`);
       i = end + 2;
     } else if (src[i] === '$') {
       const end = findInlineEnd(src, i + 1);
       if (end === -1) { out += '$'; i += 1; continue; }
-      out += keep(renderMath(substituteMath(src.slice(i + 1, end), resolve), false));
+      out += keep(renderMath(substituteMath(src.slice(i + 1, end), resolve), false, mathml));
       i = end + 1;
     } else if (src.startsWith('[[', i)) {
       const end = src.indexOf(']]', i + 2);
       const content = end === -1 ? '' : src.slice(i + 2, end);
       if (!content.trim() || content.includes('\n')) { out += '[['; i += 2; continue; }
-      out += keep(placeholderHtml(content, resolve));
+      out += keep(placeholderHtml(content, resolve, mathml));
       i = end + 2;
     } else {
       out += src[i];
@@ -89,10 +101,14 @@ function restore(html, slots) {
 function inline(text, images) {
   return text
     .replace(/!\[([^\]]*)\]\(img:([a-z0-9]+)(?:\|(\d+))?\)/g, (_, alt, id, width) => {
-      const src = images?.[id];
+      const src = typeof images === 'function' ? images(id) : images?.[id];
       if (!src) return `<span class="missing-image">[missing image]</span>`;
       const style = width ? ` style="width:${Number(width)}px"` : '';
       return `<img class="q-image" src="${src}" alt="${alt}"${style}>`;
+    })
+    .replace(/!\[([^\]]*)\]\((https?:\/\/[^\s|)]+)(?:\|(\d+))?\)/g, (_, alt, url, width) => {
+      const style = width ? ` style="width:${Number(width)}px"` : '';
+      return `<img class="q-image" src="${url}" alt="${alt}"${style}>`;
     })
     .replace(/\*\*(?=\S)(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(?=\S)(.+?)\*/g, '<em>$1</em>')
@@ -135,16 +151,18 @@ function blocks(text, images) {
   return out.join('');
 }
 
-export function renderRich(src, images = {}, resolve = null) {
+// `images` is a map of id -> data URL, or a function id -> URL.
+// opts.mathml renders math as plain MathML (for Schoology export).
+export function renderRich(src, images = {}, resolve = null, opts = {}) {
   if (!src) return '';
   const slots = [];
-  const protectedText = protect(String(src).replace(/\r\n?/g, '\n'), slots, resolve);
+  const protectedText = protect(String(src).replace(/\r\n?/g, '\n'), slots, resolve, Boolean(opts.mathml));
   return restore(blocks(escapeHtml(protectedText), images), slots);
 }
 
 // For one-line contexts such as answer choices: no paragraph wrapper.
-export function renderInline(src, images = {}, resolve = null) {
-  const html = renderRich(src, images, resolve);
+export function renderInline(src, images = {}, resolve = null, opts = {}) {
+  const html = renderRich(src, images, resolve, opts);
   const m = html.match(/^<p>([\s\S]*)<\/p>$/);
   return m && !m[1].includes('<p>') ? m[1] : html;
 }

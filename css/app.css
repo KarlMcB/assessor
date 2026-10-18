@@ -396,3 +396,9 @@ a.button.wide { width: 100%; justify-content: center; margin-top: 6px; }
   .editor-preview { position: static; }
   .main { padding: 16px; }
 }
+
+/* ---- import ---- */
+.import-list { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 8px; }
+.import-row { align-items: flex-start; }
+.dialog details summary { cursor: pointer; }
+.dialog details ul { margin: 6px 0; padding-left: 20px; font-size: 13px; }

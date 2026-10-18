@@ -4,6 +4,7 @@ import { QUESTION_TYPES, TYPE_ORDER, bankFile, duplicateQuestion, questionCountL
 import { downloadJson, store } from '../store.js';
 import { questionBody, questionProblems, metaChips, typeLabel } from '../question-view.js';
 import { isDynamic } from '../algo/engine.js';
+import { exportDialog } from './export.js';
 import { h, add, clear, select, toast } from '../ui.js';
 
 // View options survive re-renders and navigation within the session.
@@ -48,6 +49,7 @@ export function bankView(main, { bankId, focus }) {
     ),
     h(
       'div.bank-actions',
+      h('button', { onclick: () => exportDialog({ bank }) }, 'Export to Schoology…'),
       h('button', { onclick: () => exportBank(bank) }, 'Export bank'),
       h('button.danger', { onclick: () => deleteBank(bank) }, 'Delete bank'),
     ),

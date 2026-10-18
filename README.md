@@ -8,6 +8,8 @@ A test generator for teachers: question banks, algorithmic questions, printed ve
 - **M2 algorithms:** dynamic questions with variables, conditions, user functions, about 120 built-in functions and display formats, seeded so each version's values are reproducible (`js/algo/`).
 - **M3 test builder:** tests made of copies of bank questions; six ways to add questions (random, list, viewing, standard, criteria with search syntax, all), a quick wizard, reordering, sorting, scrambling, points, a summary report, and saving edits back to the bank.
 - **M4 printing:** 1–26 versions with scrambled questions and choices and recalculated values, answer keys, answer strips, a version map, and layout settings (paper, margins, one or two columns, headers and footers, numbering, spacing, choice labels, points, instructions), laid out on measured pages and printed through the browser (`js/print/`).
+- **M5 Schoology export:** tests and banks export as a Common Cartridge zip built like text2qti's output, with MathML math, images, rationales as feedback, numeric questions as fill-in-the-blank, and dynamic questions as fixed values or a random-pick pool of variants (`js/export/`).
+- **Import:** **Import…** in the sidebar reads Schoology exports (`.imscc`), text2qti zips and assessor's own exports. Each quiz becomes a bank (optionally a test too); MathML and `\( \)` math become LaTeX, packaged images are kept, and web-linked images stay as links (`js/import/`).
 
 ## Running it
 

@@ -12,6 +12,7 @@ import { testView } from './views/test.js';
 import { selectView } from './views/select.js';
 import { wizardView, summaryView } from './views/wizard.js';
 import { printView } from './views/print.js';
+import { importCartridge } from './views/import.js';
 
 const main = document.getElementById('main');
 const sidebar = document.getElementById('sidebar');
@@ -95,7 +96,7 @@ function renderSidebar() {
       ),
     ),
     h('button.wide', { onclick: createBank }, '+ New bank'),
-    h('button.wide', { onclick: importBank }, 'Import bank…'),
+    h('button.wide', { onclick: importBank, title: 'An assessor bank, or a Schoology / Common Cartridge / QTI zip' }, 'Import…'),
     h('div.side-heading.spaced', 'Tests'),
     h(
       'nav.bank-list',
@@ -177,9 +178,11 @@ async function openLibrary() {
   }
 }
 
+// Import an assessor bank (.bank.json) or a Schoology / QTI zip (.imscc, .zip).
 async function importBank() {
-  const file = await pickFile('.json,application/json');
+  const file = await pickFile('.json,application/json,.zip,.imscc,application/zip');
   if (!file) return;
+  if (/\.(zip|imscc)$/i.test(file.name)) return importCartridge(file);
   try {
     const { bank, images } = readBankFile(JSON.parse(await file.text()));
     if (store.lib.banks.some((b) => b.id === bank.id)) {

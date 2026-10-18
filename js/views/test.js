@@ -9,6 +9,7 @@ import { testSeed } from '../containers.js';
 import { store } from '../store.js';
 import { questionBody, questionProblems, metaChips, typeLabel } from '../question-view.js';
 import { isDynamic } from '../algo/engine.js';
+import { exportDialog } from './export.js';
 import { h, add, clear, select, toast, openDialog } from '../ui.js';
 
 export const SELECT_METHODS = {
@@ -48,6 +49,7 @@ export function testView(main, { testId, focus }) {
       h(
         'div.bank-actions',
         h('a.button.primary-link', { href: `#/test/${test.id}/print` }, 'Print…'),
+        h('button', { onclick: () => exportDialog({ test }) }, 'Export to Schoology…'),
         h('a.button', { href: `#/test/${test.id}/summary` }, 'Summary'),
         h('button', { onclick: duplicateTest }, 'Duplicate'),
         h('button.danger', { onclick: deleteTest }, 'Delete test'),
