@@ -54,6 +54,13 @@ export default {
     ok(renderInline('v = [[v0]] m/s').includes('<span class="var-chip"'));
   },
 
+  'placeholders resolve in text and math'() {
+    const resolve = (c) => (c.trim() === 'v' ? { latex: '-4.9', text: '−4.9' } : { error: 'nope' });
+    eq(renderInline('v is [[v]]', {}, resolve), 'v is −4.9');
+    ok(renderInline('$x = [[v]]$', {}, resolve).includes('4.9'));
+    ok(renderInline('[[w]]', {}, resolve).includes('var-error'));
+  },
+
   'images resolve from the library'() {
     const html = renderInline('![d](img:abc|200)', { abc: 'data:image/png;base64,AAA' });
     ok(html.includes('src="data:image/png;base64,AAA"'));

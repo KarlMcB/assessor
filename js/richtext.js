@@ -4,9 +4,11 @@
 //   - bullet / 1. numbered lists, | pipe | tables |
 //   $inline math$  $$display math$$  \$ for a literal dollar sign
 //   ![alt](img:ID) or ![alt](img:ID|300) for an image 300 px wide
-//   [[name]] algorithm variable (shown as a placeholder until M2)
+//   [[name]] or [[= expression :: format]] algorithm value, also inside math
 //
 // Blank lines separate paragraphs; single newlines become line breaks.
+// `resolve(content)` turns a placeholder into { latex, text } or { error };
+// without it, placeholders show as chips.
 
 import katex from '../vendor/katex/katex.mjs';
 
@@ -21,8 +23,24 @@ export function renderMath(tex, displayMode) {
   return katex.renderToString(tex, { displayMode, throwOnError: false, strict: 'ignore', output: 'htmlAndMathml' });
 }
 
-// Pull math and variables out first so Markdown rules never touch them.
-function protect(src, slots) {
+// Replace placeholders inside a LaTeX formula with their LaTeX values.
+function substituteMath(tex, resolve) {
+  return tex.replace(/\[\[(.+?)\]\]/g, (_, content) => {
+    if (!resolve) return `\\boxed{\\texttt{${content.replace(/[\\{}$&#^_%~]/g, '')}}}`;
+    const r = resolve(content);
+    return r.error ? '\\color{red}{\\text{??}}' : `{${r.latex}}`;
+  });
+}
+
+function placeholderHtml(content, resolve) {
+  if (!resolve) return `<span class="var-chip" title="Algorithm value">${escapeHtml(content.trim())}</span>`;
+  const r = resolve(content);
+  if (r.error) return `<span class="var-error" title="${escapeHtml(r.error)}">[[${escapeHtml(content)}]]</span>`;
+  return r.text !== null ? escapeHtml(r.text) : renderMath(r.latex, false);
+}
+
+// Pull math and placeholders out first so Markdown rules never touch them.
+function protect(src, slots, resolve) {
   const keep = (html) => `${OPEN}${slots.push(html) - 1}${CLOSE}`;
   let out = '';
   let i = 0;
@@ -33,18 +51,18 @@ function protect(src, slots) {
     } else if (src.startsWith('$$', i)) {
       const end = src.indexOf('$$', i + 2);
       if (end === -1) { out += src.slice(i); break; }
-      out += keep(`<div class="math-display">${renderMath(src.slice(i + 2, end), true)}</div>`);
+      out += keep(`<div class="math-display">${renderMath(substituteMath(src.slice(i + 2, end), resolve), true)}</div>`);
       i = end + 2;
     } else if (src[i] === '$') {
       const end = findInlineEnd(src, i + 1);
       if (end === -1) { out += '$'; i += 1; continue; }
-      out += keep(renderMath(src.slice(i + 1, end), false));
+      out += keep(renderMath(substituteMath(src.slice(i + 1, end), resolve), false));
       i = end + 1;
     } else if (src.startsWith('[[', i)) {
       const end = src.indexOf(']]', i + 2);
-      const name = end === -1 ? '' : src.slice(i + 2, end).trim();
-      if (!name || /[\n[\]]/.test(name)) { out += '[['; i += 2; continue; }
-      out += keep(`<span class="var-chip" title="Algorithm variable">${escapeHtml(name)}</span>`);
+      const content = end === -1 ? '' : src.slice(i + 2, end);
+      if (!content.trim() || content.includes('\n')) { out += '[['; i += 2; continue; }
+      out += keep(placeholderHtml(content, resolve));
       i = end + 2;
     } else {
       out += src[i];
@@ -117,16 +135,16 @@ function blocks(text, images) {
   return out.join('');
 }
 
-export function renderRich(src, images = {}) {
+export function renderRich(src, images = {}, resolve = null) {
   if (!src) return '';
   const slots = [];
-  const protectedText = protect(String(src).replace(/\r\n?/g, '\n'), slots);
+  const protectedText = protect(String(src).replace(/\r\n?/g, '\n'), slots, resolve);
   return restore(blocks(escapeHtml(protectedText), images), slots);
 }
 
 // For one-line contexts such as answer choices: no paragraph wrapper.
-export function renderInline(src, images = {}) {
-  const html = renderRich(src, images);
+export function renderInline(src, images = {}, resolve = null) {
+  const html = renderRich(src, images, resolve);
   const m = html.match(/^<p>([\s\S]*)<\/p>$/);
   return m && !m[1].includes('<p>') ? m[1] : html;
 }

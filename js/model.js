@@ -91,6 +91,7 @@ export function newQuestion(type, settings = defaultSettings()) {
     stem: '',
     ...typeFields(type, settings),
     rationale: '',
+    algorithm: '',
     points: settings.defaultPoints?.[type] ?? 1,
     narrativeId: null,
     meta: emptyMeta(),
@@ -146,7 +147,8 @@ export function parseNumber(text) {
 }
 
 // Returns a list of human-readable problems. An empty list means the question is complete.
-export function validateQuestion(q) {
+// `resolve` turns [[…]] placeholders in plain fields (the numeric answer) into values.
+export function validateQuestion(q, resolve = (s) => s) {
   const problems = [];
   if (!q.stem.trim()) problems.push('Question text is empty.');
   if (!(Number(q.points) >= 0)) problems.push('Points must be zero or more.');
@@ -162,7 +164,8 @@ export function validateQuestion(q) {
       break;
     }
     case 'num': {
-      if (Number.isNaN(parseNumber(q.answer.value))) problems.push('Answer must be a number (e.g. 25, -4.9, 6.02e23 or 1/3).');
+      const value = resolve(q.answer.value);
+      if (Number.isNaN(parseNumber(value)) && !/\[\[/.test(value)) problems.push('Answer must be a number (e.g. 25, -4.9, 6.02e23, 1/3 or [[= expression]]).');
       const tol = q.answer.tolerance;
       if (String(tol).trim() !== '' && !(parseNumber(tol) >= 0)) problems.push('Tolerance must be a number zero or more.');
       break;

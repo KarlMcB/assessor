@@ -236,8 +236,23 @@ input.narrow { width: 90px; }
 .correct-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .choice-row textarea { min-height: 34px; }
 
-.meta-edit { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
-.meta-edit summary { cursor: pointer; font-weight: 600; }
+.meta-edit, .algo-edit { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+.meta-edit summary, .algo-edit summary { cursor: pointer; font-weight: 600; }
+.algo-edit[open] { display: flex; flex-direction: column; gap: 8px; }
+.algo-edit p { margin: 4px 0 0; }
+.algo-source { tab-size: 4; }
+.algo-error { color: var(--danger); margin: 0; }
+.values-table { border-collapse: collapse; font-size: 14px; }
+.values-table td { padding: 2px 14px 2px 0; vertical-align: baseline; }
+button.link { border: 0; background: none; padding: 0; color: var(--accent); font-family: ui-monospace, "SF Mono", Menlo, monospace; text-decoration: underline dotted; }
+button.link:hover { background: none; text-decoration: underline; }
+.fn-ref summary { cursor: pointer; color: var(--accent); font-weight: 500; font-size: 14px; }
+.fn-ref h4 { margin: 12px 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.fn-ref dl { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 0; font-size: 13px; }
+.fn-ref dd { margin: 0; color: var(--muted); }
+.badge.dynamic { background: var(--warn-soft); color: var(--warn); }
+.var-error { color: var(--danger); font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.9em; text-decoration: underline wavy; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em; }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }

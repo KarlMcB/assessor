@@ -2,8 +2,9 @@
 
 import modelTests from './model.test.js';
 import richtextTests from './richtext.test.js';
+import algoTests from './algo.test.js';
 
-const suites = { model: modelTests, richtext: richtextTests };
+const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests };
 const results = document.getElementById('results');
 let passed = 0;
 let failed = 0;

@@ -192,6 +192,12 @@ Each question, narrative or matching group can have an **algorithm**: an ordered
 - **Recalculate** (per question or whole test) picks a new seed and stores it on the test.
 - A **unique across versions** flag on a variable requests a different value in every version where possible.
 
+### 7.6a As built (M2)
+- Definitions are one script per question (the editor's Algorithm box): `name = expr`, `name = expr :: format`, `f(x) = expr`, `condition: expr`, `unique: a, b`, `# comment`. Definitions can appear in any order; circular ones are reported.
+- Formats are written after `::`: `general`, `dp N`, `fixed N`, `comma N`, `sci N`, `sig N`, `coef`, `coef1`. The same suffix works in placeholders: `[[KE :: sig 2]]`, `[[= 2*m :: dp 1]]`.
+- Differences from ExamView, chosen to match normal maths: `-2^2` is −4 (ExamView gives 4); quartiles use the median-of-halves method (as on TI calculators); `range(lo, hi)` without a step picks values at the precision of its bounds (`range(1, 10)` gives whole numbers, `range(1.5, 3.5)` tenths). `sqr` is kept as ExamView's square root.
+- Additions: degree trig (`sind cosd tand asind acosd atand atan2d`), `!=` as another way to write `<>`.
+
 ### 7.7 Tests for the engine
 The expression engine gets an automated test suite: every function, operator precedence, type errors, condition retries, and seed reproducibility. It runs in the browser from `tests.html`.
 

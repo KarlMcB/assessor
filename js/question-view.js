@@ -1,14 +1,17 @@
 // Read-only rendering of a question with its answer, used by the bank view
-// and the editor preview.
+// and the editor preview. Algorithm values are filled in for the given seed.
 
-import { ESSAY_KINDS, QUESTION_TYPES, parseNumber } from './model.js';
+import { ESSAY_KINDS, QUESTION_TYPES, parseNumber, validateQuestion } from './model.js';
 import { renderInline, renderRich, escapeHtml } from './richtext.js';
+import { instantiate, algorithmProblems } from './algo/engine.js';
 import { h } from './ui.js';
 
 const LETTERS = 'ABCDEFGH';
 
-export function questionBody(q, images, { showAnswer = true, showRationale = true } = {}) {
-  const parts = [h('div.q-stem', { html: renderRich(q.stem, images) || '<p class="placeholder">No question text yet</p>' })];
+export function questionBody(q, images, { showAnswer = true, showRationale = true, seed, version } = {}) {
+  const inst = instantiate(q, { seed: seed ?? q.id, version });
+  const resolve = inst.dynamic ? inst.resolve : null;
+  const parts = [h('div.q-stem', { html: renderRich(q.stem, images, resolve) || '<p class="placeholder">No question text yet</p>' })];
 
   if (q.type === 'mc' || q.type === 'mr') {
     const cols = Math.max(1, Number(q.columns) || 1);
@@ -21,7 +24,7 @@ export function questionBody(q, images, { showAnswer = true, showRationale = tru
             'li',
             { class: showAnswer && c.correct ? 'correct' : '' },
             h('span.choice-letter', `${LETTERS[i]}.`),
-            h('span.choice-text', { html: renderInline(c.text, images) || '<span class="placeholder">empty</span>' }),
+            h('span.choice-text', { html: renderInline(c.text, images, resolve) || '<span class="placeholder">empty</span>' }),
             c.lockPosition ? h('span.lock', { title: 'Stays in place when choices are scrambled' }, '🔒') : null,
           ),
         ),
@@ -30,16 +33,16 @@ export function questionBody(q, images, { showAnswer = true, showRationale = tru
   }
 
   if (showAnswer) {
-    const answer = answerText(q, images);
+    const answer = answerText(q, images, inst);
     if (answer) parts.push(h('div.q-answer', h('span.label', 'Answer: '), h('span', { html: answer })));
   }
   if (showRationale && q.rationale?.trim()) {
-    parts.push(h('div.q-rationale', h('span.label', 'Rationale: '), h('div', { html: renderRich(q.rationale, images) })));
+    parts.push(h('div.q-rationale', h('span.label', 'Rationale: '), h('div', { html: renderRich(q.rationale, images, resolve) })));
   }
   return parts;
 }
 
-export function answerText(q, images) {
+export function answerText(q, images, inst = instantiate(q)) {
   switch (q.type) {
     case 'tf':
       return q.answer ? 'True' : 'False';
@@ -51,17 +54,24 @@ export function answerText(q, images) {
     case 'num': {
       const a = q.answer;
       if (!String(a.value).trim()) return '<span class="warn">no answer</span>';
-      let s = escapeHtml(a.value) + (a.unit ? ` ${escapeHtml(a.unit)}` : '');
+      const value = inst.plain(a.value);
+      let s = escapeHtml(value) + (a.unit ? ` ${escapeHtml(a.unit)}` : '');
       const tol = String(a.tolerance).trim();
       if (tol) s += a.toleranceType === 'pct' ? ` ± ${escapeHtml(tol)}%` : ` ± ${escapeHtml(tol)}`;
-      if (Number.isNaN(parseNumber(a.value))) s += ' <span class="warn">(not a number)</span>';
+      if (Number.isNaN(parseNumber(value))) s += ' <span class="warn">(not a number)</span>';
       return s;
     }
     case 'essay':
-      return q.answer.model?.trim() ? renderInline(q.answer.model, images) : '';
+      return q.answer.model?.trim() ? renderInline(q.answer.model, images, inst.dynamic ? inst.resolve : null) : '';
     default:
       return '';
   }
+}
+
+// Validation plus algorithm problems.
+export function questionProblems(q, seed) {
+  const inst = instantiate(q, { seed: seed ?? q.id });
+  return [...validateQuestion(q, inst.plain), ...(inst.dynamic ? algorithmProblems(q, inst) : [])];
 }
 
 export function typeLabel(q) {

@@ -4,7 +4,8 @@ A test generator for teachers: question banks, algorithmic questions, printed ve
 
 ## Status
 
-Milestone 1 (foundation) is in place: question banks, an editor for True/False, Multiple Choice, Multiple Response, Numeric Response and Short Answer/Problem/Essay questions, LaTeX math via KaTeX, browser storage, and library files.
+- **M1 foundation:** question banks, an editor for True/False, Multiple Choice, Multiple Response, Numeric Response and Short Answer/Problem/Essay questions, LaTeX math via KaTeX, browser storage, and library files.
+- **M2 algorithms:** dynamic questions with variables, conditions, user functions, about 120 built-in functions and display formats, seeded so each version's values are reproducible (`js/algo/`).
 
 ## Running it
 

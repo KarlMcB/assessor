@@ -1,8 +1,9 @@
 // Bank view: one bank's questions, grouped by type or in bank order.
 
-import { QUESTION_TYPES, TYPE_ORDER, bankFile, duplicateQuestion, questionCountLabel, sortedByType, validateQuestion } from '../model.js';
+import { QUESTION_TYPES, TYPE_ORDER, bankFile, duplicateQuestion, questionCountLabel, sortedByType } from '../model.js';
 import { downloadJson, store } from '../store.js';
-import { questionBody, metaChips, typeLabel } from '../question-view.js';
+import { questionBody, questionProblems, metaChips, typeLabel } from '../question-view.js';
+import { isDynamic } from '../algo/engine.js';
 import { h, clear, select, toast } from '../ui.js';
 
 // View options survive re-renders and navigation within the session.
@@ -131,7 +132,7 @@ export function bankView(main, { bankId, focus }) {
   }
 
   function card(q, number, order) {
-    const problems = validateQuestion(q);
+    const problems = questionProblems(q);
     const editHref = `#/bank/${bank.id}/q/${q.id}`;
     const others = store.lib.banks.filter((b) => b.id !== bank.id);
     return h(
@@ -142,6 +143,7 @@ export function bankView(main, { bankId, focus }) {
         h('span.q-number', `${number}.`),
         h('span.badge', typeLabel(q)),
         h('span.muted', `${q.points} pt${Number(q.points) === 1 ? '' : 's'}`),
+        isDynamic(q) ? h('span.badge.dynamic', { title: 'Values change for each version' }, 'Dynamic') : null,
         q.flags.doNotUse ? h('span.badge.warn', 'Not used on tests') : null,
         problems.length ? h('span.badge.warn', { title: problems.join('\n') }, `${problems.length} issue${problems.length > 1 ? 's' : ''}`) : null,
         h(
@@ -207,7 +209,7 @@ export function bankView(main, { bankId, focus }) {
 }
 
 function searchText(q) {
-  const parts = [q.stem, q.rationale, ...(q.choices || []).map((c) => c.text), q.answer?.model, q.answer?.value];
+  const parts = [q.stem, q.rationale, q.algorithm, ...(q.choices || []).map((c) => c.text), q.answer?.model, q.answer?.value];
   const m = q.meta;
   parts.push(m.difficulty, m.reference, m.topic, m.notes, m.misc, ...m.standards, ...m.objectives, ...m.keywords);
   return parts.filter(Boolean).join(' ').toLowerCase();

@@ -3,10 +3,14 @@
 
 import {
   ESSAY_KINDS, MAX_CHOICES, MIN_CHOICES, QUESTION_TYPES, TYPE_ORDER,
-  changeType, newChoice, newId, newQuestion, splitList, validateQuestion,
+  changeType, newChoice, newId, newQuestion, splitList,
 } from '../model.js';
 import { store } from '../store.js';
-import { questionBody, typeLabel } from '../question-view.js';
+import { questionBody, questionProblems, typeLabel } from '../question-view.js';
+import { instantiate } from '../algo/engine.js';
+import { FUNCTIONS, CONSTANT_DOCS } from '../algo/functions.js';
+import { formatValue } from '../algo/values.js';
+import { renderMath } from '../richtext.js';
 import { h, clear, field, select, toast, imageFileToDataUrl, insertAtCursor } from '../ui.js';
 
 const LETTERS = 'ABCDEFGH';
@@ -21,10 +25,16 @@ export function editorView(main, { bankId, questionId, newType }) {
 
   let draft = existing ? structuredClone(existing) : newQuestion(newType, store.lib.settings);
   let dirty = false;
+  // Preview values: the question's own seed first, a new one on each Recalculate.
+  let recalcCount = 0;
+  const previewSeed = () => (recalcCount ? `${draft.id}#${recalcCount}` : draft.id);
+  // The text field that [[name]] gets inserted into from the values table.
+  let lastField = null;
 
   const form = h('div.editor-form');
   const preview = h('div.preview-body');
   const problemsEl = h('ul.problems');
+  const valuesEl = h('div.algo-values');
 
   const markDirty = () => {
     dirty = true;
@@ -65,7 +75,8 @@ export function editorView(main, { bankId, questionId, newType }) {
           : null,
         field('Points', h('input.narrow', { type: 'number', min: 0, step: 'any', value: draft.points, oninput: (e) => { draft.points = e.target.value === '' ? 0 : Number(e.target.value); markDirty(); } })),
       ),
-      field('Question', richArea(draft.stem, (v) => (draft.stem = v), 5), 'Math: $F = ma$ inline, $$…$$ on its own line. **bold**, *italic*, ^sup^, ~sub~. Paste or drop an image.'),
+      field('Question', richArea(draft.stem, (v) => (draft.stem = v), 5), 'Math: $F = ma$ inline, $$…$$ on its own line. **bold**, *italic*, ^sup^, ~sub~. Paste or drop an image. Algorithm values: [[m]] or [[= 2*m :: dp 1]].'),
+      algorithmSection(),
       typeSection(),
       field('Rationale', richArea(draft.rationale, (v) => (draft.rationale = v), 2), 'Shown in answer keys when enabled.'),
       metaSection(),
@@ -164,7 +175,7 @@ export function editorView(main, { bankId, questionId, newType }) {
       'div',
       h(
         'div.row',
-        field('Answer', h('input', { value: a.value, placeholder: 'e.g. 25, -4.9, 6.02e23', oninput: (e) => { a.value = e.target.value; markDirty(); } })),
+        field('Answer', h('input', { value: a.value, placeholder: 'e.g. 25, -4.9, [[= 0.5*m*v^2]]', onfocus: (e) => (lastField = e.target), oninput: (e) => { a.value = e.target.value; markDirty(); } })),
         field('Unit', h('input.narrow', { value: a.unit, placeholder: 'J', oninput: (e) => { a.unit = e.target.value; markDirty(); } })),
         field('Tolerance', h('input.narrow', { value: a.tolerance, placeholder: '0', oninput: (e) => { a.tolerance = e.target.value; markDirty(); } })),
         field('', select({ abs: '± value', pct: '± percent' }, a.toleranceType, { onchange: (e) => { a.toleranceType = e.target.value; markDirty(); } })),
@@ -211,12 +222,88 @@ export function editorView(main, { bankId, questionId, newType }) {
     return h('datalist', { id }, [...values].sort().map((v) => h('option', { value: v })));
   }
 
+  // ---- algorithm ---------------------------------------------------------------
+
+  function algorithmSection() {
+    const source = h('textarea.algo-source', {
+      rows: Math.max(4, draft.algorithm.split('\n').length + 1),
+      value: draft.algorithm,
+      spellcheck: false,
+      placeholder: 'm = range(1, 5, 0.5)    # mass in kg\nv = rand(10)\nKE = 0.5*m*v^2 :: sig 3\ncondition: KE > 10',
+      'aria-label': 'Algorithm definitions',
+      oninput: (e) => { draft.algorithm = e.target.value; markDirty(); },
+    });
+    return h(
+      'details.algo-edit',
+      { open: Boolean(draft.algorithm.trim()) },
+      h('summary', 'Algorithm (dynamic values)'),
+      h('p.field-hint', 'One definition per line: ', h('code', 'name = expression'), ', optional ', h('code', ':: sig 3'), ' display format, ',
+        h('code', 'f(x) = …'), ' functions, ', h('code', 'condition: …'), ' (values are redrawn until true), ', h('code', '# comment'), '.'),
+      source,
+      h('div.row', h('button', { onclick: () => { recalcCount++; updatePreview(); } }, '⟳ Recalculate'),
+        h('span.field-hint', 'Click a name to insert it into the last text field you used.')),
+      valuesEl,
+      functionReference(),
+    );
+  }
+
+  function renderValues(inst) {
+    clear(valuesEl);
+    const result = inst.run;
+    if (result.error) {
+      valuesEl.append(h('p.algo-error', `Line ${result.error.line ?? '?'}: ${result.error.message}`));
+      return;
+    }
+    if (!result.program.vars.length) return;
+    valuesEl.append(
+      h(
+        'table.values-table',
+        h('tbody', result.program.vars.map((v) => {
+          let shown;
+          try {
+            const f = formatValue(result.values.get(v.name), result.formats.get(v.name));
+            shown = f.text !== null ? h('span', f.text) : h('span', { html: renderMath(f.latex, false) });
+          } catch (err) {
+            shown = h('span.algo-error', err.message);
+          }
+          return h('tr',
+            h('td', h('button.link', { title: `Insert [[${v.name}]]`, onclick: () => insertPlaceholder(v.name) }, v.name)),
+            h('td', shown),
+            h('td.muted', v.format ? `:: ${v.format.kind}${v.format.digits !== undefined ? ` ${v.format.digits}` : ''}` : ''));
+        })),
+      ),
+    );
+    if (result.attempts > 1) valuesEl.append(h('p.field-hint', `Conditions needed ${result.attempts} tries.`));
+  }
+
+  function insertPlaceholder(name) {
+    const target = lastField && form.contains(lastField) ? lastField : form.querySelector('textarea');
+    insertAtCursor(target, `[[${name}]]`);
+  }
+
+  function functionReference() {
+    const groups = new Map();
+    for (const f of Object.values(FUNCTIONS)) {
+      if (!groups.has(f.cat)) groups.set(f.cat, []);
+      groups.get(f.cat).push(f);
+    }
+    return h(
+      'details.fn-ref',
+      h('summary', 'Functions and formats'),
+      h('p.field-hint', 'Operators: + − * / ^ (power), \\ (whole-number division), % or MOD, ! (factorial), = <> < <= > >=, & or AND, | or OR, NOT. Write 3*x, not 3x.'),
+      h('p.field-hint', 'Formats after ::  general · dp N (up to N decimals) · fixed N · comma N · sci N · sig N (significant figures) · coef / coef1 (polynomial coefficients).'),
+      h('p.field-hint', 'Constants: ', CONSTANT_DOCS.map(([k, v]) => `${k} = ${v}`).join(' · ')),
+      [...groups].map(([cat, fns]) => h('div.fn-group', h('h4', cat), h('dl', fns.map((f) => [h('dt', h('code', f.sig)), h('dd', f.doc)])))),
+    );
+  }
+
   // A textarea that supports pasting/dropping images into the library.
   function richArea(value, set, rows, attrs = {}) {
     const ta = h('textarea', {
       rows,
       value,
       ...attrs,
+      onfocus: (e) => (lastField = e.target),
       oninput: (e) => { set(e.target.value); markDirty(); },
       onpaste: (e) => {
         const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
@@ -244,16 +331,18 @@ export function editorView(main, { bankId, questionId, newType }) {
   // ---- preview and saving --------------------------------------------------
 
   function updatePreview() {
+    const seed = previewSeed();
     clear(preview).append(
       h('div.q-card-head', h('span.badge', typeLabel(draft)), h('span.muted', `${draft.points} pt${Number(draft.points) === 1 ? '' : 's'}`)),
-      ...questionBody(draft, store.lib.images),
+      ...questionBody(draft, store.lib.images, { seed }),
     );
-    const problems = validateQuestion(draft);
+    renderValues(instantiate(draft, { seed }));
+    const problems = questionProblems(draft, seed);
     clear(problemsEl).append(...problems.map((p) => h('li', p)));
   }
 
   function save(andNew) {
-    const problems = validateQuestion(draft);
+    const problems = questionProblems(draft);
     if (problems.length && !confirm(`This question isn’t complete:\n\n• ${problems.join('\n• ')}\n\nSave anyway?`)) return;
     draft.modified = new Date().toISOString();
     store.update(() => {
