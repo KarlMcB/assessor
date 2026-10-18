@@ -4,3 +4,10 @@ __pycache__/
 *.pyc
 .venv/
 .env
+
+# Copyrighted reference material (never publish)
+ExamViewDocs/
+
+# Personal question data
+*.assessor.json
+*.bank.json
