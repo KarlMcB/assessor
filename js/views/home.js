@@ -2,14 +2,14 @@
 
 import { questionCountLabel } from '../model.js';
 import { store } from '../store.js';
-import { h, formatTime } from '../ui.js';
+import { h, add, formatTime } from '../ui.js';
 
-export function homeView(main, { onNewBank }) {
+export function homeView(main, { onNewBank, onNewTest }) {
   const lib = store.lib;
   const total = lib.banks.reduce((n, b) => n + b.questions.length, 0);
   const st = store.status;
 
-  main.append(
+  add(main, 
     h('h2', 'Library'),
     lib.banks.length
       ? h(
@@ -20,6 +20,17 @@ export function homeView(main, { onNewBank }) {
         )
       : h('div.empty', h('p', 'No question banks yet.'), h('button.primary', { onclick: onNewBank }, 'Create your first bank')),
     lib.banks.length ? h('p.muted', `${lib.banks.length} bank${lib.banks.length === 1 ? '' : 's'}, ${questionCountLabel(total)} in total.`) : null,
+
+    h('h2', 'Tests'),
+    lib.tests.length
+      ? h(
+          'div.bank-grid',
+          lib.tests.map((t) => h('a.bank-tile', { href: `#/test/${t.id}` }, h('strong', t.title), h('span', questionCountLabel(t.items.length)), h('span.muted', `Changed ${formatTime(t.modified)}`))),
+        )
+      : null,
+    lib.banks.length
+      ? h('div.row', h('button', { onclick: onNewTest }, '+ New test'), h('a.button.primary', { href: '#/wizard' }, 'Quick test wizard…'))
+      : h('p.muted', 'Tests are built from bank questions, so start with a bank.'),
 
     h('h2', 'Saving'),
     h(

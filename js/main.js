@@ -2,10 +2,15 @@
 
 import { newBank, questionCountLabel, readBankFile, newId } from './model.js';
 import { pickFile, store } from './store.js';
-import { h, clear, toast, formatTime } from './ui.js';
+import { h, add, clear, toast, formatTime } from './ui.js';
+import { newTest } from './testmodel.js';
+import { bankContainer, testContainer } from './containers.js';
 import { homeView } from './views/home.js';
 import { bankView } from './views/bank.js';
 import { editorView } from './views/editor.js';
+import { testView } from './views/test.js';
+import { selectView } from './views/select.js';
+import { wizardView, summaryView } from './views/wizard.js';
 
 const main = document.getElementById('main');
 const sidebar = document.getElementById('sidebar');
@@ -26,7 +31,25 @@ function parseRoute(hash) {
     if (parts[2] === 'new' && parts[3]) return { view: 'editor', bankId: parts[1], newType: parts[3] };
     return { view: 'bank', bankId: parts[1], focus: params.focus };
   }
+  if (parts[0] === 'test' && parts[1]) {
+    const testId = parts[1];
+    if (parts[2] === 'q' && parts[3]) return { view: 'editor', testId, questionId: parts[3] };
+    if (parts[2] === 'new' && parts[3]) return { view: 'editor', testId, newType: parts[3] };
+    if (parts[2] === 'add' && parts[3]) return { view: 'select', testId, method: parts[3] };
+    if (parts[2] === 'summary') return { view: 'summary', testId };
+    return { view: 'test', testId, focus: params.focus };
+  }
+  if (parts[0] === 'wizard') return { view: 'wizard' };
   return { view: 'home' };
+}
+
+function containerFor(route) {
+  if (route.bankId) {
+    const bank = store.lib.banks.find((b) => b.id === route.bankId);
+    return bank && bankContainer(bank);
+  }
+  const test = store.lib.tests.find((t) => t.id === route.testId);
+  return test && testContainer(test);
 }
 
 function render() {
@@ -34,8 +57,12 @@ function render() {
   clear(main);
   const route = parseRoute(location.hash);
   if (route.view === 'bank') current = bankView(main, route);
-  else if (route.view === 'editor') current = editorView(main, route);
-  else current = homeView(main, { onNewBank: createBank });
+  else if (route.view === 'editor') current = editorView(main, { ...route, container: containerFor(route) });
+  else if (route.view === 'test') current = testView(main, route);
+  else if (route.view === 'select') current = selectView(main, route);
+  else if (route.view === 'summary') current = summaryView(main, route);
+  else if (route.view === 'wizard') current = wizardView(main);
+  else current = homeView(main, { onNewBank: createBank, onNewTest: createTest });
   current.route = route;
   main.scrollTop = 0;
   if (route.view !== 'bank' || !route.focus) window.scrollTo(0, 0);
@@ -55,8 +82,8 @@ window.addEventListener('hashchange', () => {
 // ---- sidebar, status and banner ------------------------------------------------
 
 function renderSidebar() {
-  const activeBank = current.route?.bankId;
-  clear(sidebar).append(
+  const { bankId: activeBank, testId: activeTest } = current.route || {};
+  add(clear(sidebar), 
     h('div.side-heading', 'Question banks'),
     h(
       'nav.bank-list',
@@ -66,6 +93,15 @@ function renderSidebar() {
     ),
     h('button.wide', { onclick: createBank }, '+ New bank'),
     h('button.wide', { onclick: importBank }, 'Import bank…'),
+    h('div.side-heading.spaced', 'Tests'),
+    h(
+      'nav.bank-list',
+      store.lib.tests.map((t) =>
+        h('a', { href: `#/test/${t.id}`, class: t.id === activeTest ? 'active' : '' }, h('span.bank-name', t.title), h('span.count', String(t.items.length))),
+      ),
+    ),
+    h('button.wide', { onclick: createTest }, '+ New test'),
+    h('a.button.wide', { href: '#/wizard' }, 'Quick test wizard…'),
   );
 }
 
@@ -80,7 +116,7 @@ function renderStatus() {
   }
   banner.hidden = !store.needsBackupReminder();
   if (!banner.hidden) {
-    clear(banner).append(
+    add(clear(banner), 
       h('span', st.lastFileSave
         ? `Changes since ${formatTime(st.unsavedSince)} aren’t in a library file yet.`
         : 'This library has never been saved to a file. The file is your backup.'),
@@ -108,6 +144,14 @@ function createBank() {
   const bank = newBank(title.trim() || 'Untitled bank');
   store.update((lib) => lib.banks.push(bank));
   location.hash = `#/bank/${bank.id}`;
+}
+
+function createTest() {
+  const title = prompt('Title for the new test:', 'Untitled test');
+  if (title === null) return;
+  const test = newTest(title.trim() || 'Untitled test');
+  store.update((lib) => lib.tests.push(test));
+  location.hash = `#/test/${test.id}`;
 }
 
 async function saveLibrary() {
@@ -170,7 +214,7 @@ document.addEventListener('visibilitychange', () => {
 try {
   await store.load();
 } catch (err) {
-  main.append(h('div.empty', h('h2', 'Storage unavailable'), h('p', `assessor couldn’t open browser storage: ${err.message}`)));
+  add(main, h('div.empty', h('h2', 'Storage unavailable'), h('p', `assessor couldn’t open browser storage: ${err.message}`)));
   throw err;
 }
 currentHash = location.hash;

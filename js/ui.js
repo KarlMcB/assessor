@@ -30,6 +30,12 @@ function append(el, children) {
   }
 }
 
+// Append children, skipping null/false (native append would print "null").
+export function add(el, ...children) {
+  append(el, children);
+  return el;
+}
+
 export function clear(el) {
   el.replaceChildren();
   return el;
@@ -45,6 +51,30 @@ export function select(options, value, attrs = {}) {
 
 export function field(label, control, hint) {
   return h('label.field', h('span.field-label', label), control, hint ? h('span.field-hint', hint) : null);
+}
+
+// A modal dialog. Each action's onclick may return false to keep the dialog open.
+// Resolves with the label of the action used (or null if dismissed).
+export function openDialog(title, body, actions = [{ label: 'Close' }], { wide = false } = {}) {
+  return new Promise((resolve) => {
+    const dlg = h(`dialog.dialog${wide ? '.wide' : ''}`);
+    const buttons = actions.map((a) =>
+      h(`button${a.primary ? '.primary' : ''}${a.danger ? '.danger' : ''}`, {
+        type: 'button',
+        onclick: async () => {
+          if (a.onclick && (await a.onclick()) === false) return;
+          dlg.close(a.label);
+        },
+      }, a.label),
+    );
+    dlg.append(h('h3', title), h('div.dialog-body', body), h('div.dialog-actions', buttons));
+    dlg.addEventListener('close', () => {
+      dlg.remove();
+      resolve(dlg.returnValue || null);
+    });
+    document.body.append(dlg);
+    dlg.showModal();
+  });
 }
 
 let toastTimer;

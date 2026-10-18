@@ -4,7 +4,7 @@ import { QUESTION_TYPES, TYPE_ORDER, bankFile, duplicateQuestion, questionCountL
 import { downloadJson, store } from '../store.js';
 import { questionBody, questionProblems, metaChips, typeLabel } from '../question-view.js';
 import { isDynamic } from '../algo/engine.js';
-import { h, clear, select, toast } from '../ui.js';
+import { h, add, clear, select, toast } from '../ui.js';
 
 // View options survive re-renders and navigation within the session.
 const viewState = new Map();
@@ -17,7 +17,7 @@ function stateFor(bankId) {
 export function bankView(main, { bankId, focus }) {
   const bank = store.lib.banks.find((b) => b.id === bankId);
   if (!bank) {
-    main.append(h('div.empty', h('h2', 'Bank not found'), h('a', { href: '#/' }, 'Back to start')));
+    add(main, h('div.empty', h('h2', 'Bank not found'), h('a', { href: '#/' }, 'Back to start')));
     return {};
   }
   const st = stateFor(bankId);
@@ -83,7 +83,7 @@ export function bankView(main, { bankId, focus }) {
     h('label.check', h('input', { type: 'checkbox', checked: st.answers, onchange: (e) => { st.answers = e.target.checked; renderList(); } }), 'Show answers'),
   );
 
-  main.append(header, newButtons, toolbar, list);
+  add(main, header, newButtons, toolbar, list);
 
   function visibleQuestions() {
     const needle = st.filter.trim().toLowerCase();

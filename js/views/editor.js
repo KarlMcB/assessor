@@ -1,5 +1,5 @@
 // Question editor: a form on the left, a live preview on the right.
-// Edits go to a draft; nothing changes in the bank until Save.
+// Edits go to a draft; nothing changes in the bank or test until Save.
 
 import {
   ESSAY_KINDS, MAX_CHOICES, MIN_CHOICES, QUESTION_TYPES, TYPE_ORDER,
@@ -11,15 +11,14 @@ import { instantiate } from '../algo/engine.js';
 import { FUNCTIONS, CONSTANT_DOCS } from '../algo/functions.js';
 import { formatValue } from '../algo/values.js';
 import { renderMath } from '../richtext.js';
-import { h, clear, field, select, toast, imageFileToDataUrl, insertAtCursor } from '../ui.js';
+import { h, add, clear, field, select, toast, imageFileToDataUrl, insertAtCursor } from '../ui.js';
 
 const LETTERS = 'ABCDEFGH';
 
-export function editorView(main, { bankId, questionId, newType }) {
-  const bank = store.lib.banks.find((b) => b.id === bankId);
-  const existing = bank?.questions.find((q) => q.id === questionId);
-  if (!bank || (questionId && !existing) || (newType && !QUESTION_TYPES[newType])) {
-    main.append(h('div.empty', h('h2', 'Question not found'), h('a', { href: bank ? `#/bank/${bank.id}` : '#/' }, 'Back')));
+export function editorView(main, { container, questionId, newType }) {
+  const existing = container && questionId ? container.find(questionId) : null;
+  if (!container || (questionId && !existing) || (newType && !QUESTION_TYPES[newType])) {
+    add(main, h('div.empty', h('h2', 'Question not found'), h('a', { href: container ? container.backHref() : '#/' }, 'Back')));
     return {};
   }
 
@@ -27,7 +26,7 @@ export function editorView(main, { bankId, questionId, newType }) {
   let dirty = false;
   // Preview values: the question's own seed first, a new one on each Recalculate.
   let recalcCount = 0;
-  const previewSeed = () => (recalcCount ? `${draft.id}#${recalcCount}` : draft.id);
+  const previewSeed = () => (recalcCount ? `${container.seed(draft)}#${recalcCount}` : container.seed(draft));
   // The text field that [[name]] gets inserted into from the values table.
   let lastField = null;
 
@@ -41,18 +40,20 @@ export function editorView(main, { bankId, questionId, newType }) {
     updatePreview();
   };
 
-  main.append(
+  add(main, 
     h(
       'div.editor-head',
-      h('a', { href: `#/bank/${bank.id}` }, `← ${bank.title}`),
+      h('a', { href: container.backHref() }, `← ${container.title}`),
       h('h2', existing ? 'Edit question' : 'New question'),
       h(
         'div.editor-actions',
         h('button', { onclick: cancel }, 'Cancel'),
+        existing ? container.extraActions(draft).map((a) => h('button', { title: a.title, onclick: () => save(false, a) }, a.label)) : null,
         h('button', { onclick: () => save(true), title: 'Save and start another question of the same type' }, 'Save & new'),
         h('button.primary', { onclick: () => save(false), title: 'Save (⌘↩)' }, 'Save'),
       ),
     ),
+    container.note ? h('p.editor-note', container.note) : null,
     h('div.editor', form, h('aside.editor-preview', h('h3', 'Preview'), preview, problemsEl)),
   );
 
@@ -60,7 +61,7 @@ export function editorView(main, { bankId, questionId, newType }) {
 
   function renderForm() {
     clear(form);
-    form.append(
+    add(form, 
       h(
         'div.row',
         field('Type', select(Object.fromEntries(TYPE_ORDER.map((t) => [t, QUESTION_TYPES[t].label])), draft.type, {
@@ -120,7 +121,7 @@ export function editorView(main, { bankId, questionId, newType }) {
     const renderRows = () => {
       clear(rows);
       draft.choices.forEach((c, i) => {
-        rows.append(
+        add(rows, 
           h(
             'div.choice-row',
             h('label.correct-toggle', { title: multi ? 'Correct (select all that apply)' : 'Correct answer' },
@@ -251,11 +252,11 @@ export function editorView(main, { bankId, questionId, newType }) {
     clear(valuesEl);
     const result = inst.run;
     if (result.error) {
-      valuesEl.append(h('p.algo-error', `Line ${result.error.line ?? '?'}: ${result.error.message}`));
+      add(valuesEl, h('p.algo-error', `Line ${result.error.line ?? '?'}: ${result.error.message}`));
       return;
     }
     if (!result.program.vars.length) return;
-    valuesEl.append(
+    add(valuesEl, 
       h(
         'table.values-table',
         h('tbody', result.program.vars.map((v) => {
@@ -273,7 +274,7 @@ export function editorView(main, { bankId, questionId, newType }) {
         })),
       ),
     );
-    if (result.attempts > 1) valuesEl.append(h('p.field-hint', `Conditions needed ${result.attempts} tries.`));
+    if (result.attempts > 1) add(valuesEl, h('p.field-hint', `Conditions needed ${result.attempts} tries.`));
   }
 
   function insertPlaceholder(name) {
@@ -332,32 +333,28 @@ export function editorView(main, { bankId, questionId, newType }) {
 
   function updatePreview() {
     const seed = previewSeed();
-    clear(preview).append(
+    add(clear(preview), 
       h('div.q-card-head', h('span.badge', typeLabel(draft)), h('span.muted', `${draft.points} pt${Number(draft.points) === 1 ? '' : 's'}`)),
       ...questionBody(draft, store.lib.images, { seed }),
     );
     renderValues(instantiate(draft, { seed }));
     const problems = questionProblems(draft, seed);
-    clear(problemsEl).append(...problems.map((p) => h('li', p)));
+    add(clear(problemsEl), ...problems.map((p) => h('li', p)));
   }
 
-  function save(andNew) {
-    const problems = questionProblems(draft);
+  function save(andNew, extra = null) {
+    const problems = questionProblems(draft, container.seed(draft));
     if (problems.length && !confirm(`This question isn’t complete:\n\n• ${problems.join('\n• ')}\n\nSave anyway?`)) return;
     draft.modified = new Date().toISOString();
-    store.update(() => {
-      const i = bank.questions.findIndex((q) => q.id === draft.id);
-      if (i === -1) bank.questions.push(draft);
-      else bank.questions[i] = draft;
-      bank.modified = draft.modified;
-    });
+    container.save(draft);
+    extra?.run(draft);
     dirty = false;
-    toast('Question saved');
-    location.hash = andNew ? `#/bank/${bank.id}/new/${draft.type}?t=${Date.now()}` : `#/bank/${bank.id}?focus=${draft.id}`;
+    toast(extra ? 'Saved to the test and the bank' : 'Question saved');
+    location.hash = andNew ? container.newHref(draft.type) : container.backHref(draft.id);
   }
 
   function cancel() {
-    location.hash = existing ? `#/bank/${bank.id}?focus=${existing.id}` : `#/bank/${bank.id}`;
+    location.hash = container.backHref(existing?.id);
   }
 
   const onKey = (e) => {

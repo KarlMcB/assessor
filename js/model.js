@@ -1,6 +1,8 @@
 // Data model: factories, type conversion, validation and file normalization.
 // Everything here is plain data (JSON-serializable); no DOM access.
 
+import { normalizeTest } from './testmodel.js';
+
 export const LIBRARY_FORMAT = 'assessor-library';
 export const BANK_FORMAT = 'assessor-bank';
 export const FORMAT_VERSION = 1;
@@ -221,7 +223,7 @@ export function normalizeLibrary(data) {
   const lib = { ...newLibrary(), ...data };
   lib.settings = { ...defaultSettings(), ...data.settings, defaultPoints: { ...defaultSettings().defaultPoints, ...data.settings?.defaultPoints } };
   lib.banks = (data.banks || []).map(normalizeBank);
-  lib.tests = data.tests || [];
+  lib.tests = (data.tests || []).map(normalizeTest);
   lib.images = data.images || {};
   return lib;
 }
