@@ -11,3 +11,5 @@ ExamViewDocs/
 # Personal question data
 *.assessor.json
 *.bank.json
+*.assessor-test.json
+*.assessor-bank.json

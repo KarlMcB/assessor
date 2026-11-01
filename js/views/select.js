@@ -1,12 +1,13 @@
 // Adding bank questions to a test: random, from a list, while viewing,
 // by standard, by criteria, or all.
 
-import { QUESTION_TYPES, TYPE_ORDER, sortedByType } from '../model.js';
+import { QUESTION_TYPES, TYPE_ORDER, narrativeOf, sortedByType } from '../model.js';
 import { META_FIELDS, addToTest, distinctValues, metaValues, pickRandom, pool } from '../testmodel.js';
 import { matchesQuery, parseQuery, questionSearchText } from '../search.js';
 import { store } from '../store.js';
-import { questionBody, typeLabel } from '../question-view.js';
+import { narrativeBody, narrativeContext, questionBody, typeLabel } from '../question-view.js';
 import { renderRich } from '../richtext.js';
+import { bankMenu, shownBanks } from './bank-menu.js';
 import { h, add, clear, select, toast } from '../ui.js';
 
 export const SELECT_METHODS = {
@@ -18,19 +19,14 @@ export const SELECT_METHODS = {
   all: 'All questions',
 };
 
-// Bank choice is remembered while the app is open.
-let chosenBanks = null;
-
 export function selectView(main, { testId, method }) {
   const test = store.lib.tests.find((t) => t.id === testId);
   if (!test || !SELECT_METHODS[method]) {
     add(main, h('div.empty', h('h2', 'Not found'), h('a', { href: test ? `#/test/${test.id}` : '#/' }, 'Back')));
     return {};
   }
-  const banks = store.lib.banks;
-  if (!chosenBanks) chosenBanks = banks.map((b) => b.id);
-  chosenBanks = chosenBanks.filter((id) => banks.some((b) => b.id === id));
-  if (!chosenBanks.length) chosenBanks = banks.map((b) => b.id);
+  const banks = () => store.lib.banks;
+  let chosenBanks = shownBanks();
 
   const body = h('div.select-body');
   const back = `#/test/${test.id}`;
@@ -38,22 +34,7 @@ export function selectView(main, { testId, method }) {
   add(main, 
     h('div.editor-head', h('a', { href: back }, `← ${test.title}`), h('h2', `Add questions ${SELECT_METHODS[method].toLowerCase()}`)),
     h('nav.method-tabs', Object.entries(SELECT_METHODS).map(([m, label]) => h('a', { href: `#/test/${test.id}/add/${m}`, class: m === method ? 'active' : '' }, label))),
-    banks.length
-      ? h(
-          'div.bank-picker',
-          h('span.field-label', 'From banks:'),
-          banks.map((b) =>
-            h('label.check', h('input', {
-              type: 'checkbox',
-              checked: chosenBanks.includes(b.id),
-              onchange: (e) => {
-                chosenBanks = e.target.checked ? [...chosenBanks, b.id] : chosenBanks.filter((id) => id !== b.id);
-                render();
-              },
-            }), `${b.title} `, h('span.muted', `(${b.questions.length})`)),
-          ),
-        )
-      : h('div.empty', h('p', 'There are no question banks yet.')),
+    h('div.bank-picker', bankMenu((ids) => { chosenBanks = ids; render(); })),
     body,
   );
 
@@ -69,7 +50,7 @@ export function selectView(main, { testId, method }) {
 
   function render() {
     clear(body);
-    if (!chosenBanks.length) return add(body, h('p.muted', 'Choose at least one bank.'));
+    if (!chosenBanks.length) return add(body, h('p.muted', banks().length ? 'Choose at least one bank from the Banks list.' : 'No banks are open. Open a bank file from the Banks list.'));
     ({ random, list, view, standard, criteria, all })[method]();
   }
 
@@ -153,10 +134,18 @@ export function selectView(main, { testId, method }) {
       for (const g of sortedByType(list.map((e) => e.q))) {
         const members = list.filter((e) => e.q.type === g.type);
         container.append(h('h4.type-heading', h('label.check', groupBox(members), `${QUESTION_TYPES[g.type].label} (${members.length})`)));
+        let shown = null;
         for (const e of members) {
           const box = h('input', { type: 'checkbox' });
           checks.set(e, box);
-          container.append(h('label.q-card.pickable', h('div.pick', box), h('div.q-card-body', questionBody(e.q, store.lib.images))));
+          // A narrative often holds the question's figure, so show it above the questions using it.
+          const n = narrativeOf(e.bank, e.q);
+          if (n && n !== shown) {
+            container.append(h('div.narrative-card', h('div.narrative-title', n.title), h('div.narrative-text', { html: narrativeBody(n, store.lib.images) })));
+          }
+          shown = n;
+          const narrative = narrativeContext(n, n?.id);
+          container.append(h('label.q-card.pickable', h('div.pick', box), h('div.q-card-body', questionBody(e.q, store.lib.images, { narrative }))));
         }
       }
     }

@@ -1,7 +1,9 @@
 import {
   newLibrary, newBank, newQuestion, changeType, duplicateQuestion, validateQuestion, parseNumber,
   normalizeLibrary, bankFile, readBankFile, pruneImages, splitList, sortedByType,
+  testFile, testFileName, bankFileName, docHash, readTestFile,
 } from '../js/model.js';
+import { normalizeTest } from '../js/testmodel.js';
 import { eq, ok, throws } from './assert.js';
 
 function completeMc() {
@@ -77,6 +79,30 @@ export default {
     ok(d.id !== q.id);
     ok(d.choices[0].id !== q.choices[0].id);
     eq(d.stem, q.stem);
+  },
+
+  'a test file carries its images and tracks changes'() {
+    const lib = newLibrary();
+    lib.images.used = 'data:a';
+    lib.images.other = 'data:b';
+    const q = newQuestion('tf');
+    q.stem = '![x](img:used)';
+    const test = normalizeTest({ title: 'Unit: 1/2', items: [{ id: 'i', sourceBankId: 'b', question: q }] });
+    const file = JSON.parse(JSON.stringify(testFile(lib, test)));
+    eq(Object.keys(file.images), ['used']);
+    eq(testFileName(test), 'Unit 1 2.assessor-test.json');
+    const read = readTestFile(file);
+    eq(read.test.title, 'Unit: 1/2');
+    eq(read.test.fileHash, docHash(read.test));
+    read.test.title = 'Changed';
+    ok(read.test.fileHash !== docHash(read.test));
+    ok(!('fileHash' in testFile(lib, { ...read.test }).test));
+    const bank = newBank('Waves');
+    const opened = readBankFile(JSON.parse(JSON.stringify(bankFile(lib, bank)))).bank;
+    eq(opened.fileHash, docHash(opened));
+    ok(!('fileHash' in bankFile(lib, opened).bank));
+    eq(bankFileName(bank), 'Waves.assessor-bank.json');
+    throws(() => readTestFile({ format: 'other' }), /not an Assessor test/);
   },
 
   'library round-trips through JSON'() {

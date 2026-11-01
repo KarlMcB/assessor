@@ -1,8 +1,6 @@
-// Library storage: an IndexedDB working copy plus explicit library files.
-//
-// Safari can't write to a chosen folder, so the downloaded .assessor.json file
-// is the real copy. IndexedDB keeps work between sessions; the status tracks
-// whether there are changes that haven't been saved to a file yet.
+// Library storage: an IndexedDB working copy of the open tests and banks, plus
+// explicit files. Safari can't write to a chosen folder, so saving downloads a
+// file; each test and bank has its own, and a library file backs up everything open.
 
 import { newLibrary, normalizeLibrary, pruneImages, now } from './model.js';
 
@@ -89,6 +87,10 @@ class Store extends EventTarget {
     this.dispatchEvent(new Event('change'));
   }
 
+  forgetUndo() {
+    this.#undo = [];
+  }
+
   #scheduleWrite() {
     clearTimeout(this.#writeTimer);
     this.#writeTimer = setTimeout(() => this.flush(), 250);
@@ -171,6 +173,7 @@ export function pickFiles(accept) {
     input.accept = accept;
     input.multiple = true;
     input.addEventListener('change', () => resolve([...input.files]), { once: true });
+    input.addEventListener('cancel', () => resolve([]), { once: true });
     input.click();
   });
 }
@@ -181,6 +184,7 @@ export function pickFile(accept) {
     input.type = 'file';
     input.accept = accept;
     input.addEventListener('change', () => resolve(input.files[0] || null), { once: true });
+    input.addEventListener('cancel', () => resolve(null), { once: true });
     input.click();
   });
 }

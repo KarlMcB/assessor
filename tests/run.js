@@ -9,8 +9,9 @@ import exportTests from './export.test.js';
 import importTests from './import.test.js';
 import m6Tests from './m6.test.js';
 import typeTests from './types.test.js';
+import examviewTests from './examview.test.js';
 
-const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests, tests: testModelTests, printing: printTests, export: exportTests, import: importTests, 'matching, narratives, graphs, text2qti': m6Tests, 'question types': typeTests };
+const suites = { model: modelTests, richtext: richtextTests, algorithm: algoTests, tests: testModelTests, printing: printTests, export: exportTests, import: importTests, 'matching, narratives, graphs, text2qti': m6Tests, 'question types': typeTests, 'ExamView RTF import': examviewTests };
 const results = document.getElementById('results');
 let passed = 0;
 let failed = 0;

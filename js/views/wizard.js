@@ -3,15 +3,16 @@
 import { QUESTION_TYPES, TYPE_ORDER } from '../model.js';
 import { addToTest, newTest, pickRandom, pool, summary } from '../testmodel.js';
 import { store } from '../store.js';
+import { bankMenu, shownBanks } from './bank-menu.js';
 import { h, add, clear, toast } from '../ui.js';
 
 export function wizardView(main) {
   const banks = store.lib.banks;
   if (!banks.length) {
-    add(main, h('div.empty', h('h2', 'Quick test'), h('p', 'Create a question bank first; the wizard picks questions from your banks.')));
+    add(main, h('div.empty', h('h2', 'Quick test'), h('p', 'Open or create a question bank first; the wizard picks questions from open banks.')));
     return {};
   }
-  let chosen = banks.map((b) => b.id);
+  let chosen = shownBanks();
   const title = h('input.wide-input', { value: '', placeholder: 'e.g. Unit 2 Test: Kinematics', 'aria-label': 'Test title' });
   const counts = h('div');
   const totalEl = h('p.muted');
@@ -45,14 +46,7 @@ export function wizardView(main) {
     h('ol.wizard',
       h('li', h('span.field-label', 'Title'), title),
       h('li', h('span.field-label', 'Banks to use'),
-        h('div.bank-picker', banks.map((b) => h('label.check', h('input', {
-          type: 'checkbox',
-          checked: true,
-          onchange: (e) => {
-            chosen = e.target.checked ? [...chosen, b.id] : chosen.filter((id) => id !== b.id);
-            renderCounts();
-          },
-        }), `${b.title} `, h('span.muted', `(${b.questions.length})`))))),
+        h('div.bank-picker', bankMenu((ids) => { chosen = ids; renderCounts(); }))),
       h('li', h('span.field-label', 'Questions of each type'), counts, totalEl),
     ),
     h('div.row', h('button.primary', { onclick: create }, 'Create test')),

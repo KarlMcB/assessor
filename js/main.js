@@ -12,7 +12,7 @@ import { editorView } from './views/editor.js';
 import { selectView } from './views/select.js';
 import { wizardView, summaryView } from './views/wizard.js';
 import { printView } from './views/print.js';
-import { COMMANDS, KEY_LABEL, commandFor, handleShortcut, isEnabled, menus, noteRecent, setZoom } from './commands.js';
+import { COMMANDS, KEY_LABEL, commandFor, handleShortcut, isEnabled, menus, noteRecent, openDroppedFiles, saveAllDocs, setZoom, unsavedDocs } from './commands.js';
 
 const main = document.getElementById('main');
 const sheet = document.getElementById('sheet');
@@ -138,7 +138,7 @@ function startWindow() {
 function libraryLine() {
   const t = store.lib.tests.length;
   const b = store.lib.banks.length;
-  return `${t} test${t === 1 ? '' : 's'}, ${b} question bank${b === 1 ? '' : 's'}`;
+  return `${t} open test${t === 1 ? '' : 's'}, ${b} open question bank${b === 1 ? '' : 's'}`;
 }
 
 // ---- menu bar -----------------------------------------------------------------------------
@@ -298,28 +298,23 @@ function describe(e) {
   const pts = `${e.q.points} pt${Number(e.q.points) === 1 ? '' : 's'}`;
   if (app.kind !== 'test') return `Question ${e.number} · ${pts}`;
   const bank = store.lib.banks.find((b) => b.id === e.item?.sourceBankId);
-  return `Question ${e.number} · ${pts} · ${bank ? `from ${bank.title}` : e.item?.sourceBankId ? 'bank question deleted' : 'written for this test'}`;
+  return `Question ${e.number} · ${pts} · ${bank ? `from ${bank.title}` : e.item?.sourceBankId ? 'its bank isn’t open' : 'written for this test'}`;
 }
 
 function renderTitle() {
   const mode = app.kind === 'bank' ? 'Question Bank Editor' : 'Test Builder';
   titleEl.textContent = app.doc ? `${app.doc.title} — ${mode}` : 'Assessor';
   document.title = app.doc ? `${app.doc.title} — Assessor` : 'Assessor';
-  const st = store.status;
-  if (store.hasUnsavedChanges()) {
-    statusEl.textContent = `Backup needed: changes since ${formatTime(st.unsavedSince)}`;
-    statusEl.className = 'status dirty';
-  } else {
-    statusEl.textContent = st.lastFileSave ? `Backed up ${formatTime(st.lastFileSave)}` : '';
-    statusEl.className = 'status';
-  }
-  banner.hidden = !store.needsBackupReminder();
+  const unsaved = unsavedDocs();
+  statusEl.textContent = unsaved.includes(app.doc) ? 'Unsaved changes' : '';
+  statusEl.className = unsaved.includes(app.doc) ? 'status dirty' : 'status';
+  // Only documents out of sight: the one on screen shows its state in the title bar.
+  const others = unsaved.filter((d) => d !== app.doc);
+  banner.hidden = !others.length;
   if (!banner.hidden) {
     add(clear(banner),
-      h('span', st.lastFileSave
-        ? `Changes since ${formatTime(st.unsavedSince)} aren’t in a library file yet.`
-        : 'This library has never been saved to a file. The file is your backup.'),
-      h('button.primary', { type: 'button', onclick: () => COMMANDS.saveLibrary.run() }, 'Save Library File'));
+      h('span', `${others.length} other open ${others.length === 1 ? 'file isn’t' : 'files aren’t'} saved: ${others.slice(0, 3).map((d) => d.title).join(', ')}${others.length > 3 ? '…' : ''}`),
+      h('button.primary', { type: 'button', onclick: saveAllDocs }, 'Save All to Files'));
   }
 }
 
@@ -373,6 +368,12 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.getElementById('sheet-close').addEventListener('click', closeSheet);
+document.addEventListener('dragover', (e) => { if (e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', (e) => {
+  if (!e.dataTransfer?.files?.length) return;
+  e.preventDefault();
+  openDroppedFiles([...e.dataTransfer.files]);
+});
 
 // Write any pending change before the page goes away.
 document.addEventListener('visibilitychange', () => {

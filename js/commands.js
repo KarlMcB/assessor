@@ -2,8 +2,8 @@
 // Keys are written like 'ctrl+t' or 'cmd+s' and shown as ⌃T / ⌘S.
 
 import {
-  ESSAY_KINDS, QUESTION_TYPES, SINGLE_ANSWER, TYPE_ORDER, bankFile, changeType, duplicateQuestion,
-  narrativeOf, newBank, newId, now, questionCountLabel, readBankFile,
+  BANK_FORMAT, ESSAY_KINDS, LIBRARY_FORMAT, QUESTION_TYPES, SINGLE_ANSWER, TEST_FORMAT, TYPE_ORDER, bankFile, changeType, duplicateQuestion,
+  bankFileName, docHash, narrativeOf, newBank, newId, now, pruneImages, questionCountLabel, readBankFile, readTestFile, testFile, testFileName,
 } from './model.js';
 import { META_FIELDS, moveItem, newTest, scrambleTest, sortItems, sortValuesFor, sourceOf, summary, testItem } from './testmodel.js';
 import { LETTERS, normalizeLayout } from './print/layout.js';
@@ -11,7 +11,7 @@ import { downloadJson, pickFile, pickFiles, store } from './store.js';
 import { app } from './app.js';
 import { documentEntries, documentSections, questionCount } from './views/document.js';
 import { exportDialog } from './views/export.js';
-import { importCartridge, importText2qti } from './views/import.js';
+import { importCartridge, importExamView, importText2qti } from './views/import.js';
 import { narrativesPanel } from './views/narrative.js';
 import { SELECT_METHODS } from './views/select.js';
 import { h, add, clear, field, formatTime, openDialog, select, toast } from './ui.js';
@@ -57,29 +57,114 @@ export function askText(title, label, value = '', { multiline = false, hint = nu
   });
 }
 
-function openDocDialog(kind) {
-  const list = kind === 'test' ? store.lib.tests : store.lib.banks;
-  const count = (d) => questionCountLabel(kind === 'test' ? d.items.length : d.questions.length);
-  if (!list.length) return toast(kind === 'test' ? 'There are no tests yet' : 'There are no question banks yet');
-  const sorted = [...list].sort((a, b) => String(b.modified).localeCompare(String(a.modified)));
-  let chosen = sorted[0];
-  const rows = sorted.map((d) => {
-    const row = h('button.open-row', {
-      type: 'button',
-      class: d === chosen ? 'chosen' : '',
-      onclick: () => {
-        chosen = d;
-        rows.forEach((r) => r.classList.remove('chosen'));
-        row.classList.add('chosen');
-      },
-      ondblclick: () => row.closest('dialog').querySelector('button.primary').click(),
-    }, h('strong', d.title), h('span.muted', `${count(d)} · changed ${formatTime(d.modified)}`));
-    return row;
+// ---- tests and banks as files -----------------------------------------------------------------
+// Each test and bank is its own file. Open ones stay in the app until closed,
+// so nothing is lost if the window goes away before a save.
+
+const openDocs = (kind) => (kind === 'test' ? store.lib.tests : store.lib.banks);
+const docFile = (kind, doc) => (kind === 'test' ? testFile(store.lib, doc) : bankFile(store.lib, doc));
+const docFileName = (kind, doc) => (kind === 'test' ? testFileName(doc) : bankFileName(doc));
+const docChanged = (doc) => doc.fileHash !== docHash(doc);
+
+function saveDocFile(kind, doc) {
+  downloadJson(docFile(kind, doc), docFileName(kind, doc));
+  store.update(() => { doc.fileHash = docHash(doc); });
+  toast(`Saved ${docFileName(kind, doc)} to Downloads`);
+}
+
+// Closing frees the document's images, which earlier undo steps would need.
+function removeOpenDoc(kind, doc) {
+  const onScreen = app.doc === doc;
+  store.update((lib) => {
+    const list = kind === 'test' ? lib.tests : lib.banks;
+    const i = list.indexOf(doc);
+    if (i >= 0) list.splice(i, 1);
+    pruneImages(lib);
   });
-  openDialog(kind === 'test' ? 'Open Test' : 'Open Question Bank', [h('div.open-list', rows)], [
+  store.forgetUndo();
+  if (onScreen) location.hash = '#/';
+}
+
+export function closeDoc(kind, doc) {
+  if (!docChanged(doc)) return removeOpenDoc(kind, doc);
+  openDialog(`Save changes to “${doc.title}”?`, [h('p', `Its changes haven’t been saved to a ${kind === 'test' ? 'test' : 'bank'} file. If you don’t save them, they’ll be lost when it closes.`)], [
+    { label: 'Don’t Save', onclick: () => removeOpenDoc(kind, doc) },
     { label: 'Cancel' },
-    { label: 'Open', primary: true, onclick: () => { location.hash = `#/${kind}/${chosen.id}`; } },
+    { label: 'Save', primary: true, onclick: () => { saveDocFile(kind, doc); removeOpenDoc(kind, doc); } },
   ]);
+}
+
+async function openDocFile(kind, file, navigate) {
+  try {
+    const read = kind === 'test' ? readTestFile : readBankFile;
+    const data = read(JSON.parse(await file.text()));
+    const doc = data[kind];
+    const existing = openDocs(kind).find((d) => d.id === doc.id);
+    if (existing && docChanged(existing) && !confirm(`“${existing.title}” is already open with unsaved changes. Replace it with this file?`)) return;
+    store.update((lib) => {
+      const list = kind === 'test' ? lib.tests : lib.banks;
+      Object.assign(lib.images, data.images);
+      if (existing) list[list.indexOf(existing)] = doc;
+      else list.push(doc);
+    });
+    if (kind === 'bank' && app.view.hiddenBanks?.includes(doc.id)) {
+      app.view.hiddenBanks = app.view.hiddenBanks.filter((id) => id !== doc.id);
+      app.saveView();
+    }
+    if (navigate) location.hash = `#/${kind}/${doc.id}`;
+    if (existing) app.refresh();
+  } catch (err) {
+    toast(err instanceof SyntaxError ? `${file.name} isn’t an Assessor file` : err.message, 'error');
+  }
+}
+
+export async function chooseDocFiles(kind, navigate = true) {
+  for (const file of await pickFiles('.json,application/json')) await openDocFile(kind, file, navigate);
+}
+
+export function saveAllDocs() {
+  const changed = ['test', 'bank'].flatMap((kind) => openDocs(kind).filter(docChanged).map((doc) => [kind, doc]));
+  changed.forEach(([kind, doc], i) => setTimeout(() => saveDocFile(kind, doc), i * 500));
+  if (!changed.length) toast('Everything open is already saved');
+}
+
+export const unsavedDocs = () => [...store.lib.tests, ...store.lib.banks].filter(docChanged);
+
+function openDocDialog(kind) {
+  const noun = kind === 'test' ? 'test' : 'bank';
+  const docs = [...openDocs(kind)].sort((a, b) => String(b.modified).localeCompare(String(a.modified)));
+  if (!docs.length) return chooseDocFiles(kind);
+  const count = (d) => questionCountLabel(kind === 'test' ? d.items.length : d.questions.length);
+  const list = h('div.open-list', docs.map((d) => h('div.open-test',
+    h('button.open-row', { type: 'button', onclick: (e) => { location.hash = `#/${kind}/${d.id}`; e.target.closest('dialog').close(); } },
+      h('strong', d.title), h('span.muted', `${count(d)} · ${docChanged(d) ? 'not saved to a file' : 'saved to a file'}`)),
+    h('button', { type: 'button', onclick: (e) => { e.target.closest('dialog').close(); closeDoc(kind, d); } }, 'Close'))));
+  openDialog(kind === 'test' ? 'Open Test' : 'Open Question Bank', [
+    h('p', `These ${noun}s are open in Assessor. Choose one, or open a ${noun} file from Finder.`),
+    list,
+  ], [
+    { label: 'Cancel' },
+    { label: 'Save All to Files', onclick: saveAllDocs },
+    { label: 'Choose File…', primary: true, onclick: () => { chooseDocFiles(kind); } },
+  ]);
+}
+
+// Files dragged in from Finder. While adding questions, a bank joins the Banks list without leaving the page.
+export async function openDroppedFiles(files) {
+  const rtfs = files.filter((f) => /\.rtf$/i.test(f.name));
+  if (rtfs.length) importExamView(rtfs, files.filter((f) => f.type.startsWith('image/')));
+  for (const file of files.filter((f) => /\.json$/i.test(f.name))) {
+    let format = null;
+    try {
+      format = JSON.parse(await file.text()).format;
+    } catch {
+      // Reported below.
+    }
+    if (format === TEST_FORMAT) await openDocFile('test', file, true);
+    else if (format === BANK_FORMAT) await openDocFile('bank', file, !/\/add\//.test(location.hash));
+    else if (format === LIBRARY_FORMAT) toast('To open a library file, use File → Open Library File', 'error');
+    else toast(`${file.name} isn’t an Assessor test or bank file`, 'error');
+  }
 }
 
 async function createDoc(kind) {
@@ -100,18 +185,8 @@ async function saveAs() {
   if (isTest()) copy.items.forEach((it) => (it.question.id = newId()));
   else copy.questions = copy.questions.map(duplicateQuestion);
   store.update((lib) => (isTest() ? lib.tests : lib.banks).push(copy));
+  saveDocFile(app.kind, copy);
   location.hash = `#/${app.kind}/${copy.id}`;
-}
-
-function deleteDoc() {
-  const doc = app.doc;
-  const kind = app.kind;
-  if (!confirm(`Delete “${doc.title}”? You can use Undo right after, but not once you’ve closed the app.`)) return;
-  store.update((lib) => {
-    const list = kind === 'test' ? lib.tests : lib.banks;
-    list.splice(list.indexOf(doc), 1);
-  });
-  location.hash = '#/';
 }
 
 async function saveLibraryFile() {
@@ -146,30 +221,11 @@ async function importTextFile() {
   else if (files.length) toast('Choose a text2qti .txt file, along with any images it uses', 'error');
 }
 
-async function importBankFile() {
-  const file = await pickFile('.json,application/json');
-  if (!file) return;
-  try {
-    const { bank, images } = readBankFile(JSON.parse(await file.text()));
-    if (store.lib.banks.some((b) => b.id === bank.id)) {
-      bank.id = newId();
-      bank.title += ' (imported)';
-    }
-    store.update((lib) => {
-      lib.banks.push(bank);
-      Object.assign(lib.images, images);
-    });
-    location.hash = `#/bank/${bank.id}`;
-    toast(`Imported ${bank.title} (${questionCountLabel(bank.questions.length)})`);
-  } catch (err) {
-    toast(err.message || 'That file couldn’t be imported', 'error');
-  }
-}
-
-function exportBankFile() {
-  const safe = app.doc.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'bank';
-  downloadJson(bankFile(store.lib, app.doc), `${safe}.bank.json`);
-  toast('Bank exported');
+async function importRtf() {
+  const files = await pickFiles('.rtf,text/rtf,application/rtf,image/*');
+  const rtfs = files.filter((f) => /\.rtf$/i.test(f.name));
+  if (rtfs.length) importExamView(rtfs, files.filter((f) => f.type.startsWith('image/')));
+  else if (files.length) toast('Choose an ExamView import .rtf file', 'error');
 }
 
 async function testToBank() {
@@ -713,7 +769,7 @@ function clearSelections() {
         const banks = new Set(bankChecks.filter((b) => b.input.checked).map((b) => b.title));
         const types = new Set(typeChecks.filter((t) => t.input.checked).map((t) => t.type));
         if (!banks.size && !types.size) return false;
-        const titleOf = (it) => store.lib.banks.find((b) => b.id === it.sourceBankId)?.title ?? (it.sourceBankId ? '(deleted bank)' : 'Written on this test');
+        const titleOf = (it) => store.lib.banks.find((b) => b.id === it.sourceBankId)?.title ?? (it.sourceBankId ? '(bank not open)' : 'Written on this test');
         change(() => { test.items = test.items.filter((it) => !banks.has(titleOf(it)) && !types.has(it.question.type)); });
       },
     },
@@ -756,7 +812,8 @@ function helpDialog() {
   openDialog('Assessor Help', [
     h('p', 'Build question banks, then make tests from them. Tests hold copies, so editing a test never changes the bank unless you choose “Save to test and bank”.'),
     h('ul',
-      h('li', h('strong', 'Saving: '), 'work is kept in this browser as you go. File → Save Library File downloads your backup; keep it somewhere safe.'),
+      h('li', h('strong', 'Files: '), 'each test and question bank is its own file. Save downloads it, so move it from Downloads to wherever you keep them. Open one with the File menu or by dragging it onto this window. Close removes it from Assessor, not from Finder.'),
+      h('li', h('strong', 'Banks while adding questions: '), 'the Banks list chooses which open banks to use, and can open or close bank files.'),
       h('li', h('strong', 'Math: '), '$F = ma$ inline, $$…$$ on its own line.'),
       h('li', h('strong', 'Dynamic questions: '), 'define values under Algorithm in the editor and use them as [[name]].'),
       h('li', h('strong', 'Printing: '), 'in Safari’s print dialog, choose the same paper size and turn off “Print headers and footers”.'),
@@ -797,15 +854,13 @@ export const COMMANDS = {
   openTest: { label: 'Open Test…', key: 'cmd+o', run: () => openDocDialog('test') },
   newBank: { label: 'New Question Bank…', run: () => createDoc('bank') },
   openBank: { label: 'Open Question Bank…', key: 'cmd+o', run: () => openDocDialog('bank') },
-  save: { label: 'Save', key: 'cmd+s', enabled: hasDoc, run: async () => { await store.flush(); toast(`Saved in your library. Use File → Save Library File for a backup.`); } },
+  save: { label: 'Save', key: 'cmd+s', enabled: hasDoc, run: () => saveDocFile(app.kind, app.doc) },
   saveAs: { label: 'Save As…', enabled: hasDoc, run: saveAs },
-  close: { label: 'Close', key: 'ctrl+w', enabled: hasDoc, run: () => { location.hash = '#/'; } },
-  deleteDoc: { label: 'Delete…', enabled: hasDoc, run: deleteDoc },
+  close: { label: 'Close', key: 'ctrl+w', enabled: hasDoc, run: () => closeDoc(app.kind, app.doc) },
   importQti: { label: 'Schoology / Common Cartridge Zip…', run: importQti },
   importText: { label: 'text2qti Text File…', run: importTextFile },
-  importBank: { label: 'Assessor Bank File…', run: importBankFile },
+  importRtf: { label: 'ExamView RTF File…', run: importRtf },
   exportSchoology: { label: 'Schoology…', enabled: hasQuestions, run: () => exportDialog(isTest() ? { test: app.doc } : { bank: app.doc }) },
-  exportBankFile: { label: 'Assessor Bank File…', enabled: () => app.kind === 'bank', run: exportBankFile },
   testToBank: { label: 'Question Bank…', enabled: hasQuestions, run: testToBank },
   print: { label: 'Print…', key: 'cmd+p', enabled: hasQuestions, run: printDocument },
   openLibrary: { label: 'Open Library File…', run: openLibraryFile },
@@ -919,9 +974,9 @@ export function menus() {
   const m = [
     ['File', [
       ...(test ? ['wizard', 'newTest', 'openTest'] : ['newBank', 'openBank']),
-      'save', 'saveAs', 'close', { ...COMMANDS.deleteDoc, label: test ? 'Delete Test…' : 'Delete Question Bank…' }, SEP,
-      sub('Import', ['importQti', 'importText', 'importBank']),
-      sub('Export', test ? ['exportSchoology', 'testToBank'] : ['exportSchoology', 'exportBankFile']), SEP,
+      'save', 'saveAs', 'close', SEP,
+      sub('Import', ['importRtf', 'importQti', 'importText']),
+      sub('Export', test ? ['exportSchoology', 'testToBank'] : ['exportSchoology']), SEP,
       { ...COMMANDS.print, label: test ? 'Print Test…' : 'Print Question Bank…' }, SEP,
       ...(recents.length ? [...recents, SEP] : []),
       'openLibrary', 'saveLibrary', SEP,

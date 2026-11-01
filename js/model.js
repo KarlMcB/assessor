@@ -5,6 +5,7 @@ import { normalizeTest } from './testmodel.js';
 
 export const LIBRARY_FORMAT = 'assessor-library';
 export const BANK_FORMAT = 'assessor-bank';
+export const TEST_FORMAT = 'assessor-test';
 export const FORMAT_VERSION = 1;
 
 export const QUESTION_TYPES = {
@@ -266,11 +267,17 @@ export function imageRefsInBank(bank) {
   return ids;
 }
 
+export function imageRefsInTest(test) {
+  const ids = new Set();
+  for (const item of test.items || []) for (const s of textsOf(item.question)) for (const m of s.matchAll(IMG_REF)) ids.add(m[1]);
+  for (const n of test.narratives || []) for (const m of (n.body || '').matchAll(IMG_REF)) ids.add(m[1]);
+  return ids;
+}
+
 export function imageRefsInLibrary(lib) {
   const ids = new Set();
   for (const b of lib.banks) for (const id of imageRefsInBank(b)) ids.add(id);
-  for (const t of lib.tests) for (const item of t.items || []) for (const s of textsOf(item.question)) for (const m of s.matchAll(IMG_REF)) ids.add(m[1]);
-  for (const t of lib.tests) for (const n of t.narratives || []) for (const m of (n.body || '').matchAll(IMG_REF)) ids.add(m[1]);
+  for (const t of lib.tests) for (const id of imageRefsInTest(t)) ids.add(id);
   return ids;
 }
 
@@ -315,16 +322,56 @@ export function normalizeQuestion(q) {
 export function bankFile(lib, bank) {
   const images = {};
   for (const id of imageRefsInBank(bank)) if (lib.images[id]) images[id] = lib.images[id];
-  return { format: BANK_FORMAT, version: FORMAT_VERSION, exported: now(), bank, images };
+  const { fileHash, ...rest } = bank;
+  return { format: BANK_FORMAT, version: FORMAT_VERSION, exported: now(), bank: rest, images };
 }
 
 export function readBankFile(data) {
   if (!data || data.format !== BANK_FORMAT) throw new Error('This file is not an Assessor bank.');
   if (data.version > FORMAT_VERSION) throw new Error('This bank was saved by a newer version of Assessor.');
-  return { bank: normalizeBank(data.bank), images: data.images || {} };
+  const bank = normalizeBank(data.bank);
+  bank.fileHash = docHash(bank);
+  return { bank, images: data.images || {} };
 }
 
 // ---- helpers -----------------------------------------------------------------
+
+// A test as a file of its own, with the images it uses.
+export function testFile(lib, test) {
+  const { fileHash, ...rest } = test;
+  const images = {};
+  for (const id of imageRefsInTest(test)) if (lib.images[id]) images[id] = lib.images[id];
+  return { format: TEST_FORMAT, version: FORMAT_VERSION, test: rest, images };
+}
+
+export function readTestFile(data) {
+  if (!data || data.format !== TEST_FORMAT) throw new Error('This file is not an Assessor test.');
+  if (data.version > FORMAT_VERSION) throw new Error('This test was saved by a newer version of Assessor.');
+  const test = normalizeTest(data.test);
+  test.fileHash = docHash(test);
+  return { test, images: data.images || {} };
+}
+
+function safeFileName(title, fallback) {
+  return title.replace(/[/\\:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || fallback;
+}
+
+export function testFileName(test) {
+  return `${safeFileName(test.title, 'Untitled test')}.assessor-test.json`;
+}
+
+export function bankFileName(bank) {
+  return `${safeFileName(bank.title, 'Untitled bank')}.assessor-bank.json`;
+}
+
+// A fingerprint of a test's or bank's contents, to tell whether it has changed since its file was saved.
+export function docHash(doc) {
+  const { fileHash, ...rest } = doc;
+  const text = JSON.stringify(rest);
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
+  return `${text.length}-${hash >>> 0}`;
+}
 
 export function clamp(n, lo, hi) {
   return Math.min(hi, Math.max(lo, n));

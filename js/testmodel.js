@@ -237,7 +237,7 @@ export function summary(lib, test) {
   for (const it of test.items) {
     const q = it.question;
     const pts = Number(q.points) || 0;
-    const bankTitle = lib.banks.find((b) => b.id === it.sourceBankId)?.title ?? (it.sourceBankId ? '(deleted bank)' : 'Written on this test');
+    const bankTitle = lib.banks.find((b) => b.id === it.sourceBankId)?.title ?? (it.sourceBankId ? '(bank not open)' : 'Written on this test');
     bump(byBank, bankTitle, pts);
     bump(byType, q.type, pts);
     for (const s of q.meta.standards) bump(standards, s, pts);
