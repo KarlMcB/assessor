@@ -7,8 +7,16 @@ import { matchesQuery, parseQuery, questionSearchText } from '../search.js';
 import { store } from '../store.js';
 import { questionBody, typeLabel } from '../question-view.js';
 import { renderRich } from '../richtext.js';
-import { SELECT_METHODS } from './test.js';
 import { h, add, clear, select, toast } from '../ui.js';
+
+export const SELECT_METHODS = {
+  random: 'Randomly',
+  list: 'From a list',
+  view: 'While viewing',
+  standard: 'By standard',
+  criteria: 'By criteria',
+  all: 'All questions',
+};
 
 // Bank choice is remembered while the app is open.
 let chosenBanks = null;

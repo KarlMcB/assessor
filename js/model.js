@@ -9,17 +9,24 @@ export const FORMAT_VERSION = 1;
 
 export const QUESTION_TYPES = {
   tf: { label: 'True/False', short: 'T/F' },
+  mtf: { label: 'Modified True/False', short: 'MT/F' },
   mc: { label: 'Multiple Choice', short: 'MC', choices: true },
   mr: { label: 'Multiple Response', short: 'MR', choices: true },
-  match: { label: 'Matching', short: 'Match' },
+  bimodal: { label: 'Bimodal', short: 'Bi', choices: true },
+  yn: { label: 'Yes/No', short: 'Y/N' },
   num: { label: 'Numeric Response', short: 'Num' },
+  comp: { label: 'Completion', short: 'Comp' },
+  match: { label: 'Matching', short: 'Match' },
   essay: { label: 'Short Answer / Problem / Essay', short: 'SA' },
 };
 
 // Order in which type groups appear in a bank or test.
-export const TYPE_ORDER = ['tf', 'mc', 'mr', 'match', 'num', 'essay'];
+export const TYPE_ORDER = ['tf', 'mtf', 'mc', 'mr', 'bimodal', 'yn', 'num', 'comp', 'match', 'essay'];
 
-export const ESSAY_KINDS = { short: 'Short Answer', problem: 'Problem', essay: 'Essay' };
+export const ESSAY_KINDS = { short: 'Short Answer', problem: 'Problem', essay: 'Essay', case: 'Case', other: 'Other' };
+
+// Question types that have exactly one correct choice.
+export const SINGLE_ANSWER = new Set(['mc', 'bimodal']);
 
 export const MIN_CHOICES = 2;
 export const MAX_CHOICES = 8;
@@ -35,7 +42,7 @@ export function now() {
 
 export function defaultSettings() {
   return {
-    defaultPoints: { tf: 1, mc: 1, mr: 1, match: 4, num: 1, essay: 5 },
+    defaultPoints: { tf: 1, mtf: 1, mc: 1, mr: 1, bimodal: 1, yn: 1, num: 1, comp: 1, match: 4, essay: 5 },
     defaultChoices: 4,
     backupReminderDays: 3,
   };
@@ -93,6 +100,16 @@ function typeFields(type, settings) {
       const n = clamp(settings.defaultChoices ?? 4, MIN_CHOICES, MAX_CHOICES);
       return { choices: Array.from({ length: n }, () => newChoice()), columns: 1 };
     }
+    case 'bimodal': {
+      const n = clamp(settings.defaultChoices ?? 4, MIN_CHOICES, MAX_CHOICES);
+      return { choices: Array.from({ length: n }, () => newChoice()), columns: 1, showAs: 'mc', answerLines: 2 };
+    }
+    case 'yn':
+      return { answer: true };
+    case 'mtf':
+      return { answer: { value: true, correction: '' } };
+    case 'comp':
+      return { answer: { accepted: [] } };
     case 'tf':
       return { answer: true };
     case 'match': {
@@ -136,7 +153,7 @@ export function changeType(q, type, settings = defaultSettings()) {
   if (fromChoices && toChoices) {
     out.choices = q.choices.map((c) => ({ ...c }));
     out.columns = q.columns ?? 1;
-    if (type === 'mc') {
+    if (SINGLE_ANSWER.has(type)) {
       // single answer: keep only the first correct choice
       let seen = false;
       for (const c of out.choices) {
@@ -149,7 +166,7 @@ export function changeType(q, type, settings = defaultSettings()) {
 }
 
 function stripTypeFields(q) {
-  const { choices, columns, answer, kind, answerLines, pairs, ...rest } = q;
+  const { choices, columns, answer, kind, answerLines, pairs, showAs, ...rest } = q;
   return rest;
 }
 
@@ -187,12 +204,13 @@ export function validateQuestion(q, resolve = (s) => s) {
   if (!(Number(q.points) >= 0)) problems.push('Points must be zero or more.');
   switch (q.type) {
     case 'mc':
-    case 'mr': {
+    case 'mr':
+    case 'bimodal': {
       const filled = q.choices.filter((c) => c.text.trim());
       if (filled.length < MIN_CHOICES) problems.push(`Needs at least ${MIN_CHOICES} choices with text.`);
       if (q.choices.some((c) => !c.text.trim())) problems.push('Some choices are empty.');
       const correct = q.choices.filter((c) => c.correct).length;
-      if (q.type === 'mc' && correct !== 1) problems.push('Mark exactly one correct choice.');
+      if (SINGLE_ANSWER.has(q.type) && correct !== 1) problems.push('Mark exactly one correct choice.');
       if (q.type === 'mr' && correct < 1) problems.push('Mark at least one correct choice.');
       break;
     }
@@ -203,6 +221,12 @@ export function validateQuestion(q, resolve = (s) => s) {
       if (String(tol).trim() !== '' && !(parseNumber(tol) >= 0)) problems.push('Tolerance must be a number zero or more.');
       break;
     }
+    case 'mtf':
+      if (!q.answer.value && !String(q.answer.correction).trim()) problems.push('Enter the correction that makes the statement true.');
+      break;
+    case 'comp':
+      if (!q.answer.accepted.some((a) => String(a).trim())) problems.push('Enter at least one accepted answer.');
+      break;
     case 'match': {
       const choiceIds = new Set(q.choices.filter((c) => c.text.trim()).map((c) => c.id));
       if (choiceIds.size < 2) problems.push('Needs at least 2 choices with text.');
@@ -283,7 +307,7 @@ export function normalizeQuestion(q) {
   const out = { ...base, ...q };
   out.meta = { ...emptyMeta(), ...q.meta };
   out.flags = { ...base.flags, ...q.flags };
-  if (q.type === 'num') out.answer = { ...base.answer, ...q.answer };
+  if (['num', 'mtf', 'comp'].includes(q.type)) out.answer = { ...base.answer, ...q.answer };
   if (q.type === 'essay') out.answer = { ...base.answer, ...q.answer };
   return out;
 }

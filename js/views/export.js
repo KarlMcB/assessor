@@ -11,7 +11,7 @@ export function exportDialog({ test = null, bank = null }) {
   const questions = test ? displayOrder(test).map((it) => it.question) : bank.questions.filter((q) => !q.flags.doNotUse);
   if (!questions.length) return toast('There are no questions to export');
   const dynamicCount = questions.filter(isDynamic).length;
-  const opts = { title: test?.title ?? bank.title, mode: 'fixed', version: 'A', poolSize: 5, feedback: true };
+  const opts = { title: test?.title ?? bank.title, mode: 'fixed', version: test?.version || 'A', poolSize: 5, feedback: true };
 
   const poolRow = h('div.row', { hidden: true },
     field('Variants per question', h('input.narrow', { type: 'number', min: 2, max: 20, value: opts.poolSize, onchange: (e) => (opts.poolSize = Math.min(20, Math.max(2, Number(e.target.value) || 5))) })));
@@ -23,7 +23,7 @@ export function exportDialog({ test = null, bank = null }) {
       ? h('div.export-dynamic',
           h('p', `${dynamicCount} dynamic question${dynamicCount === 1 ? '' : 's'}. Schoology can’t recalculate values, so choose:`),
           h('label.check', h('input', { type: 'radio', name: 'mode', checked: true, onchange: () => { opts.mode = 'fixed'; poolRow.hidden = true; } }),
-            'Fixed values', test ? [' from version ', select(Object.fromEntries([...LETTERS].map((l) => [l, l])), 'A', { onchange: (e) => (opts.version = e.target.value) })] : null),
+            'Fixed values', test ? [' from version ', select(Object.fromEntries([...LETTERS].map((l) => [l, l])), opts.version, { onchange: (e) => (opts.version = e.target.value) })] : null),
           h('label.check', h('input', { type: 'radio', name: 'mode', onchange: () => { opts.mode = 'pool'; poolRow.hidden = false; } }),
             'A pool of variants: each student gets one at random'),
           poolRow,

@@ -201,11 +201,9 @@ function itemToQuestion(item, ctx, settings) {
       q.answer.accepted = answers.slice(1).filter((a) => !auto.has(a.trim()));
       return { question: q };
     }
-    // Text answers: assessor has no fill-in type, so keep them as the model answer.
-    const q = make('essay');
-    q.kind = 'short';
-    q.answer.model = answers.join(' / ');
-    return { question: q, note: 'fill-in-the-blank with text answers became Short Answer' };
+    const q = make('comp');
+    q.answer.accepted = answers;
+    return { question: q };
   }
 
   // essay

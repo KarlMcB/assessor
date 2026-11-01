@@ -10,7 +10,7 @@ import { instantiate, isDynamic, narrativeRun, resolvePlaceholder } from '../alg
 import { narrativeOf } from '../model.js';
 import { narrativeFor } from '../print/versions.js';
 import { displayOrder } from '../testmodel.js';
-import { testSeed } from '../containers.js';
+import { testSeed, bankSeed } from '../containers.js';
 import { makeZip, dataUrlToBytes } from './zip.js';
 
 const x = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -75,16 +75,21 @@ export function qtiItem(q, { seed, version = 'A', narrative = null, ctx }) {
   if (q.type === 'essay' && ctx.feedback && q.answer.model?.trim()) {
     feedbackHtml += `<p><strong>Model answer:</strong></p>${rich(q.answer.model)}`;
   }
+  if (q.type === 'mtf' && ctx.feedback && !q.answer.value && q.answer.correction?.trim()) {
+    feedbackHtml += `<p><strong>Correction:</strong> ${renderInline(q.answer.correction, ctx.images, resolve, opts)}</p>`;
+  }
   const fbCond = feedbackHtml ? feedbackCondition : '';
   const fbBlock = feedbackHtml ? feedbackBlock(feedbackHtml) : '';
 
-  if (q.type === 'mc' || q.type === 'mr' || q.type === 'tf') {
-    const choices = q.type === 'tf'
-      ? [{ text: 'True', correct: q.answer === true }, { text: 'False', correct: q.answer === false }]
+  if (['mc', 'mr', 'tf', 'mtf', 'yn', 'bimodal'].includes(q.type)) {
+    const fixed = { tf: ['True', 'False'], mtf: ['True', 'False'], yn: ['Yes', 'No'] }[q.type];
+    const isTrue = q.type === 'mtf' ? q.answer.value : q.answer;
+    const choices = fixed
+      ? [{ text: fixed[0], correct: isTrue === true }, { text: fixed[1], correct: isTrue === false }]
       : q.choices;
     const ids = choices.map(() => `assessor_choice_${randomHex()}`);
     const labels = choices
-      .map((c, i) => `<response_label ident="${ids[i]}"><material>${mattext(q.type === 'tf' ? `<p>${c.text}</p>` : choiceHtml(c.text))}</material></response_label>`)
+      .map((c, i) => `<response_label ident="${ids[i]}"><material>${mattext(fixed ? `<p>${c.text}</p>` : choiceHtml(c.text))}</material></response_label>`)
       .join('');
     const multi = q.type === 'mr';
     let scoring;
@@ -97,7 +102,8 @@ export function qtiItem(q, { seed, version = 'A', narrative = null, ctx }) {
       const correct = ids[choices.findIndex((c) => c.correct)] ?? ids[0];
       scoring = `<respcondition continue="No"><conditionvar><varequal respident="response1">${correct}</varequal></conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition>`;
     }
-    const type = { mc: 'multiple_choice_question', mr: 'multiple_answers_question', tf: 'true_false_question' }[q.type];
+    // Schoology has no Modified T/F, Yes/No or Bimodal: they become the closest type it has.
+    const type = { mc: 'multiple_choice_question', bimodal: 'multiple_choice_question', yn: 'multiple_choice_question', mr: 'multiple_answers_question', tf: 'true_false_question', mtf: 'true_false_question' }[q.type];
     return `<item ident="${ident}" title="Question">${metadata(type, points, ids, ref)}<presentation><material>${mattext(stem)}</material><response_lid ident="response1" rcardinality="${multi ? 'Multiple' : 'Single'}"><render_choice>${labels}</render_choice></response_lid></presentation><resprocessing>${outcomes}${fbCond}${scoring}</resprocessing>${fbBlock}</item>`;
   }
 
@@ -119,8 +125,8 @@ export function qtiItem(q, { seed, version = 'A', narrative = null, ctx }) {
     return `<item ident="${ident}" title="Question">${metadata('matching_question', points, promptIds, ref)}<presentation><material>${mattext(stem)}</material>${lids}</presentation><resprocessing>${outcomes}${fbCond}${conds}</resprocessing>${fbBlock}</item>`;
   }
 
-  if (q.type === 'num') {
-    const answers = numericAnswers(q, inst);
+  if (q.type === 'num' || q.type === 'comp') {
+    const answers = q.type === 'num' ? numericAnswers(q, inst) : [...new Set(q.answer.accepted.map((a) => inst.plain(a).trim()).filter(Boolean))];
     const ids = answers.map(() => `assessor_choice_${randomHex()}`);
     const conds = answers.map((a) => `<varequal respident="response1">${x(a)}</varequal>`).join('');
     return `<item ident="${ident}" title="Question">${metadata('short_answer_question', points, ids, ref)}<presentation><material>${mattext(stem)}</material><response_str ident="response1" rcardinality="Single"><render_fib><response_label ident="answer1" rshuffle="No"/></render_fib></response_str></presentation><resprocessing>${outcomes}${fbCond}<respcondition continue="No"><conditionvar>${conds}</conditionvar><setvar action="Set" varname="SCORE">100</setvar></respcondition></resprocessing>${fbBlock}</item>`;
@@ -312,7 +318,7 @@ export function bankEntries(bank, { mode = 'fixed', poolSize = 5 } = {}) {
     if (mode === 'pool' && isDynamic(q)) {
       return { group: Array.from({ length: poolSize }, (_, k) => ({ question: q, seed: `${q.id}|pool${k + 1}`, version: 'A', narrative: narr(q, `pool${k + 1}`) })), points: Number(q.points) || 0 };
     }
-    return { question: q, seed: q.id, version: 'A', narrative: narr(q, 'A') };
+    return { question: q, seed: bankSeed(q), version: 'A', narrative: narr(q, 'A') };
   });
 }
 

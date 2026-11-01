@@ -2,6 +2,10 @@
 
 export const DEFAULT_INSTRUCTIONS = {
   tf: 'Indicate whether each statement is true or false.',
+  mtf: 'Indicate whether each statement is true or false. If false, change the identified word or phrase to make it true.',
+  yn: 'Indicate your answer by writing Yes or No.',
+  bimodal: 'Answer each question.',
+  comp: 'Complete each statement.',
   mc: 'Identify the choice that best completes the statement or answers the question.',
   mr: 'Identify one or more choices that best complete the statement or answer the question.',
   match: 'Match each item with the correct choice. Write the letter in the blank.',
@@ -20,6 +24,7 @@ export const DEFAULT_LAYOUT = {
   headerFirst: '**{title}**  ·  Version {version}',
   headerRest: '{title}  ·  Version {version}',
   footer: 'Page {page} of {pages}',
+  footerFirst: null, // same as footer unless set
   nameLine: true,
   nameLineText: 'Name: ____________________________   Class: ___________   Date: ___________',
   startNumber: 1,

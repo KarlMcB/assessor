@@ -322,6 +322,8 @@ export function questionTexts(q) {
     texts.push(['Answer', q.answer.value]);
     q.answer.accepted.forEach((a) => texts.push(['Accepted answer', a]));
   }
+  if (q.type === 'comp') q.answer.accepted.forEach((a) => texts.push(['Accepted answer', a]));
+  if (q.type === 'mtf') texts.push(['Correction', q.answer.correction]);
   if (q.type === 'essay') texts.push(['Model answer', q.answer.model]);
   return texts;
 }

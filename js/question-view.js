@@ -9,12 +9,12 @@ import { h } from './ui.js';
 const LETTERS = 'ABCDEFGH';
 
 // narrative: { algorithm, seed } for shared variables (see narrativeContext).
-export function questionBody(q, images, { showAnswer = true, showRationale = true, seed, version, narrative = null } = {}) {
+export function questionBody(q, images, { showAnswer = true, showRationale = true, seed, version, narrative = null, showVariableNames = false } = {}) {
   const inst = instantiate(q, { seed: seed ?? q.id, version, narrative });
-  const resolve = inst.dynamic ? inst.resolve : null;
+  const resolve = inst.dynamic && !showVariableNames ? inst.resolve : null;
   const parts = [h('div.q-stem', { html: renderRich(q.stem, images, resolve) || '<p class="placeholder">No question text yet</p>' })];
 
-  if (q.type === 'mc' || q.type === 'mr') {
+  if (q.type === 'mc' || q.type === 'mr' || (q.type === 'bimodal' && q.showAs !== 'short')) {
     const cols = Math.max(1, Number(q.columns) || 1);
     parts.push(
       h(
@@ -49,6 +49,18 @@ export function answerText(q, images, inst = instantiate(q)) {
   switch (q.type) {
     case 'tf':
       return q.answer ? 'True' : 'False';
+    case 'yn':
+      return q.answer ? 'Yes' : 'No';
+    case 'mtf':
+      return q.answer.value ? 'True' : `False, ${q.answer.correction ? renderInline(q.answer.correction, images, inst.dynamic ? inst.resolve : null) : '<span class="warn">no correction</span>'}`;
+    case 'comp':
+      return q.answer.accepted.filter(Boolean).map((a) => escapeHtml(inst.plain(a))).join(' / ') || '<span class="warn">no answer</span>';
+    case 'bimodal':
+      if (q.showAs === 'short') {
+        const c = q.choices.find((x) => x.correct);
+        return c ? renderInline(c.text, images, inst.dynamic ? inst.resolve : null) : '<span class="warn">none marked</span>';
+      }
+      // falls through
     case 'mc':
     case 'mr': {
       const letters = q.choices.map((c, i) => (c.correct ? LETTERS[i] : null)).filter(Boolean);
@@ -108,6 +120,7 @@ export function questionProblems(q, seed, narrative = null) {
 
 export function typeLabel(q) {
   if (q.type === 'essay') return ESSAY_KINDS[q.kind] || 'Short Answer';
+  if (q.type === 'bimodal') return `Bimodal (${q.showAs === 'short' ? 'short answer' : 'multiple choice'})`;
   return QUESTION_TYPES[q.type].label;
 }
 

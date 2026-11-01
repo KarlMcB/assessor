@@ -7,7 +7,7 @@ import { renderInline, renderRich, escapeHtml } from '../richtext.js';
 import { instantiate, narrativeRun, resolvePlaceholder } from '../algo/engine.js';
 import { choiceKey, choiceLabel, fillTokens } from './layout.js';
 
-const OBJECTIVE = new Set(['tf', 'mc', 'mr']);
+const OBJECTIVE = new Set(['tf', 'mtf', 'yn', 'mc', 'mr']);
 
 function inst(entry, version) {
   const i = instantiate(entry.question, { seed: entry.seed, version, narrative: entry.narrative });
@@ -36,7 +36,8 @@ export function questionBlock(entry, ctx) {
   const { layout, images, version, columns } = ctx;
   const q = entry.question;
   const { resolve } = inst(entry, version);
-  const blank = layout.answerBlanks && OBJECTIVE.has(q.type) ? '<span class="pq-blank"></span>' : '';
+  const showChoices = q.type === 'mc' || q.type === 'mr' || (q.type === 'bimodal' && q.showAs !== 'short');
+  const blank = layout.answerBlanks && (OBJECTIVE.has(q.type) || (q.type === 'bimodal' && showChoices)) ? '<span class="pq-blank"></span>' : '';
   const pts = layout.points === 'inline' ? `<span class="pq-pts">(${pointsText(q.points)})</span> ` : '';
   let body = '';
   if (layout.points === 'line') body += `<div class="pq-pts-line">(${pointsText(q.points)})</div>`;
@@ -44,17 +45,17 @@ export function questionBlock(entry, ctx) {
   body += `<div class="pq-stem">${pts ? stem.replace(/^<p>/, `<p>${pts}`) : stem}</div>`;
 
   const maxCols = columns === 2 ? 2 : 4;
-  if (q.type === 'mc' || q.type === 'mr') {
+  if (showChoices) {
     const cols = Math.min(maxCols, Math.max(1, Number(q.columns) || 1));
     body += `<ol class="pq-choices" style="--cols:${cols}">${q.choices
       .map((c, i) => `<li><span class="pq-label">${choiceLabel(i, entry.number, layout)}</span><span class="pq-choice">${renderInline(c.text, images, resolve)}</span></li>`)
       .join('')}</ol>`;
-  } else if (q.type === 'tf' && layout.tfAsChoices) {
-    body += `<ol class="pq-choices" style="--cols:2">${['True', 'False']
+  } else if ((q.type === 'tf' || q.type === 'yn') && layout.tfAsChoices) {
+    body += `<ol class="pq-choices" style="--cols:2">${(q.type === 'yn' ? ['Yes', 'No'] : ['True', 'False'])
       .map((t, i) => `<li><span class="pq-label">${choiceLabel(i, entry.number, layout)}</span><span class="pq-choice">${t}</span></li>`).join('')}</ol>`;
   } else if (q.type === 'num') {
     body += '<div class="pq-answer-line">Answer: <span class="pq-write"></span></div>';
-  } else if (q.type === 'essay') {
+  } else if (q.type === 'essay' || q.type === 'bimodal') {
     const lines = Math.max(0, Number(q.answerLines) || 0);
     if (lines) body += layout.essayLines ? `<div class="pq-lines">${'<div class="pq-ruled"></div>'.repeat(lines)}</div>` : `<div class="pq-space" style="height:${lines * 0.36}in"></div>`;
   }
@@ -107,6 +108,18 @@ export function answerText(entry, layout, version, images) {
   switch (q.type) {
     case 'tf':
       return layout.tfAsChoices ? choiceKey(q.answer ? 0 : 1, entry.number, layout) : q.answer ? 'T' : 'F';
+    case 'yn':
+      return layout.tfAsChoices ? choiceKey(q.answer ? 0 : 1, entry.number, layout) : q.answer ? 'Y' : 'N';
+    case 'mtf':
+      return q.answer.value ? 'T' : `F, ${renderInline(q.answer.correction, images, resolve)}`;
+    case 'comp':
+      return q.answer.accepted.filter(Boolean).map((a) => escapeHtml(i.plain(a))).join(' / ');
+    case 'bimodal':
+      if (q.showAs === 'short') {
+        const c = q.choices.find((x) => x.correct);
+        return c ? renderInline(c.text, images, resolve) : '?';
+      }
+      // falls through
     case 'mc':
     case 'mr': {
       const keys = q.choices.map((c, k) => (c.correct ? choiceKey(k, entry.number, layout) : null)).filter(Boolean);

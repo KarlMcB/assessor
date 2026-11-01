@@ -13,7 +13,7 @@ export function bankContainer(bank) {
     backHref: (focus) => `#/bank/${bank.id}${focus ? `?focus=${focus}` : ''}`,
     newHref: (type) => `#/bank/${bank.id}/new/${type}?t=${Date.now()}`,
     find: (id) => bank.questions.find((q) => q.id === id),
-    seed: (q) => q.id,
+    seed: bankSeed,
     note: null,
     save(q) {
       store.update(() => {
@@ -27,8 +27,13 @@ export function bankContainer(bank) {
   };
 }
 
-export function testSeed(test, q, version = 'A') {
-  return `${test.seed}|${version}|${q.id}`;
+// `salt` changes when one question is recalculated on its own.
+export function testSeed(test, q, version = test.version || 'A') {
+  return `${test.seed}|${version}|${q.id}${q.salt ? `|${q.salt}` : ''}`;
+}
+
+export function bankSeed(q) {
+  return q.salt ? `${q.id}|${q.salt}` : q.id;
 }
 
 export function testContainer(test) {
@@ -36,7 +41,7 @@ export function testContainer(test) {
   return {
     kind: 'test',
     owner: test,
-    narrativeSeed: (n) => `${test.seed}|A|${n.id}`,
+    narrativeSeed: (n) => `${test.seed}|${test.version || 'A'}|${n.id}`,
     title: test.title,
     backHref: (focus) => `#/test/${test.id}${focus ? `?focus=${focus}` : ''}`,
     newHref: (type) => `#/test/${test.id}/new/${type}?t=${Date.now()}`,

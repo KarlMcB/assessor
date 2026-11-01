@@ -35,6 +35,7 @@ class Store extends EventTarget {
   status = { lastFileSave: null, lastFileName: null, unsavedSince: null, persisted: false };
   #db = null;
   #writeTimer = null;
+  #undo = [];
 
   async load() {
     this.#db = await openDb();
@@ -60,9 +61,30 @@ class Store extends EventTarget {
 
   // Apply a change to the library. `fn` mutates the library in place.
   update(fn) {
+    this.#remember();
     fn(this.lib);
     this.lib.modified = now();
     if (!this.status.unsavedSince) this.status.unsavedSince = this.lib.modified;
+    this.#scheduleWrite();
+    this.dispatchEvent(new Event('change'));
+  }
+
+  // Undo keeps recent copies of the library, without its images (they're only ever added).
+  #remember() {
+    const { images, ...rest } = this.lib;
+    this.#undo.push(JSON.stringify(rest));
+    if (this.#undo.length > 40) this.#undo.shift();
+  }
+
+  canUndo() {
+    return this.#undo.length > 0;
+  }
+
+  undo() {
+    const snapshot = this.#undo.pop();
+    if (!snapshot) return;
+    this.lib = { ...JSON.parse(snapshot), images: this.lib.images };
+    if (!this.status.unsavedSince) this.status.unsavedSince = now();
     this.#scheduleWrite();
     this.dispatchEvent(new Event('change'));
   }
@@ -121,6 +143,7 @@ class Store extends EventTarget {
     const data = JSON.parse(await file.text());
     const lib = normalizeLibrary(data);
     this.lib = lib;
+    this.#undo = [];
     this.status.lastFileSave = now();
     this.status.lastFileName = file.name;
     this.status.unsavedSince = null;

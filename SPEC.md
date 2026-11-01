@@ -331,6 +331,14 @@ Export a whole bank, or filtered questions, as a Schoology question bank.
 - **text2qti import** reads the standard syntax plus assessor-only lines: `meta: topic = …; difficulty = …; standards = A, B`, `rationale: …`, `unit: m/s`, `algorithm:` followed by indented definitions, and `match: Item = Choice` / `distractor: Choice` for matching. Image files picked together with the text file are matched by name.
 - **Smart paste:** pasting a whole multiple-choice question into an empty question field splits off the choices (`*` marks the correct one).
 
+## 13b. Desktop-style interface (as built)
+- Menus follow ExamView's menu screenshots, with one library behind File → Open and Save; File → Save/Open Library File handle the backup file. Items for features ruled out are hidden: Publish To, Print Bubble Form, passwords.
+- Also left out: Community Portal, Replace Font, Printer Setup, Exit, View → Codes, Edit → Select All and the Spell Check dialog (Safari checks spelling as you type in the editor).
+- Added beyond the screenshots: Delete Test/Bank, Update from Bank, View → Answers and Mix Question Types, Style Gallery presets of our own.
+- All question types from the New menu exist. Schoology has no equivalent for three: Modified True/False exports as True/False with the correction in feedback, Yes/No as Multiple Choice, Bimodal as Multiple Choice. Completion exports as fill-in-the-blank, and imported fill-in text answers now become Completion rather than Short Answer.
+- Test → Version sets the ID letter and the values shown; printing starts from it.
+- Shortcuts use ⌃ where Safari keeps the ⌘ key for itself.
+
 ## 14. Open decisions
 Decided: GitHub Pages from a public repo (§2); drop Bimodal and Completion, keep Matching (§4); Cartesian graphs and number lines (§9); text2qti syntax for plain-text import, with short-answer questions imported as Essay (§5).
 

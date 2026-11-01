@@ -200,7 +200,7 @@ algorithm:
     const r = parseText2qti(text, {});
     eq(r.title, 'Forces');
     const qs = r.questions;
-    eq(qs.map((q) => q.type), ['mc', 'tf', 'mr', 'num', 'essay', 'essay', 'match', 'num']);
+    eq(qs.map((q) => q.type), ['mc', 'tf', 'mr', 'num', 'comp', 'essay', 'match', 'num']);
     eq(qs[0].points, 2);
     eq(qs[0].choices.findIndex((c) => c.correct), 1);
     eq(qs[0].meta.standards, ['HS-PS2-1', 'HS-PS2-2']);
@@ -208,7 +208,7 @@ algorithm:
     eq(qs[1].answer, false);
     eq(qs[2].choices.map((c) => c.correct), [true, false, true]);
     eq([qs[3].answer.value, qs[3].answer.tolerance, qs[3].answer.unit], ['25', '0.5', 'J']);
-    eq(qs[4].answer.model, 'newton / N');
+    eq(qs[4].answer.accepted, ['newton', 'N']);
     eq(qs[6].pairs.length, 2);
     eq(qs[6].choices.length, 3);
     eq(qs[7].algorithm, 'v = range(2, 9)');

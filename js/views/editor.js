@@ -19,7 +19,7 @@ import { h, add, clear, field, select, toast, imageFileToDataUrl, insertAtCursor
 
 const LETTERS = 'ABCDEFGH';
 
-export function editorView(main, { container, questionId, newType }) {
+export function editorView(main, { container, questionId, newType, newKind }) {
   const existing = container && questionId ? container.find(questionId) : null;
   if (!container || (questionId && !existing) || (newType && !QUESTION_TYPES[newType])) {
     add(main, h('div.empty', h('h2', 'Question not found'), h('a', { href: container ? container.backHref() : '#/' }, 'Back')));
@@ -27,6 +27,7 @@ export function editorView(main, { container, questionId, newType }) {
   }
 
   let draft = existing ? structuredClone(existing) : newQuestion(newType, store.lib.settings);
+  if (!existing && draft.type === 'essay' && ESSAY_KINDS[newKind]) draft.kind = newKind;
   let dirty = false;
   // Preview values: the question's own seed first, a new one on each Recalculate.
   let recalcCount = 0;
@@ -103,6 +104,21 @@ export function editorView(main, { container, questionId, newType }) {
       case 'mc':
       case 'mr':
         return choicesSection();
+      case 'bimodal':
+        return h('div', choicesSection(),
+          field('Show on this test as', select({ mc: 'Multiple choice', short: 'Short answer' }, draft.showAs, { onchange: (e) => { draft.showAs = e.target.value; markDirty(); } })),
+          field('Answer lines when shown as short answer', h('input.narrow', { type: 'number', min: 0, max: 40, value: draft.answerLines, oninput: (e) => { draft.answerLines = Number(e.target.value) || 0; markDirty(); } })));
+      case 'yn':
+        return field('Answer', h('div.row', [true, false].map((v) =>
+          h('label.check', h('input', { type: 'radio', name: 'yn', checked: draft.answer === v, onchange: () => { draft.answer = v; markDirty(); } }), v ? 'Yes' : 'No'))));
+      case 'mtf':
+        return h('div',
+          field('Answer', h('div.row', [true, false].map((v) =>
+            h('label.check', h('input', { type: 'radio', name: 'mtf', checked: draft.answer.value === v, onchange: () => { draft.answer.value = v; markDirty(); } }), v ? 'True' : 'False')))),
+          field('If false, the correct word or phrase', richArea(draft.answer.correction, (v) => (draft.answer.correction = v), 1), 'Mark the word or phrase to change in the statement, e.g. with **bold**.'));
+      case 'comp':
+        return field('Accepted answers (one per line)', h('textarea', { rows: 3, value: draft.answer.accepted.join('\n'), oninput: (e) => { draft.answer.accepted = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean); markDirty(); } }),
+          'Type the blank into the question yourself, e.g. The SI unit of force is the ________.');
       case 'tf':
         return field(
           'Answer',
@@ -127,7 +143,7 @@ export function editorView(main, { container, questionId, newType }) {
   }
 
   function choicesSection() {
-    const multi = draft.type === 'mr';
+    const multi = draft.type === 'mr'; // mc and bimodal have one answer
     const rows = h('div.choices-edit');
     const renderRows = () => {
       clear(rows);
@@ -418,7 +434,7 @@ export function editorView(main, { container, questionId, newType }) {
           e.preventDefault();
           draft.stem = split.stem;
           draft.choices = split.choices.slice(0, MAX_CHOICES).map((c) => ({ ...newChoice(c.text), correct: c.correct }));
-          if (draft.type === 'mc') {
+          if (draft.type !== 'mr') {
             let seen = false;
             for (const c of draft.choices) { if (c.correct && !seen) seen = true; else c.correct = false; }
           }

@@ -18,9 +18,11 @@ export function buildVersions(test, layout, opts) {
   const baseGroups = typeGroups(test);
   const versions = [];
 
-  for (const letter of LETTERS.slice(0, opts.versions)) {
+  // Printing starts from the test's current version letter.
+  const start = Math.max(0, LETTERS.indexOf(test.version || 'A'));
+  for (const letter of LETTERS.slice(start, start + opts.versions)) {
     const rng = makeRng(`${test.seed}|${letter}|order`);
-    const original = letter === 'A' && opts.keepAOriginal;
+    const original = letter === LETTERS[start] && opts.keepAOriginal;
     let groups = baseGroups.map((g) => ({ type: g.type, items: g.items.slice() }));
     if (!original) {
       if (opts.scrambleSections && !test.mixTypes) groups = rng.shuffle(groups);
@@ -43,8 +45,8 @@ export function buildVersions(test, layout, opts) {
             question: q,
             number: first,
             count,
-            seed: testSeed(test, item.question, opts.recalc ? letter : 'A'),
-            narrative: narrativeFor(test, item.question, opts.recalc ? letter : 'A'),
+            seed: testSeed(test, item.question, opts.recalc ? letter : LETTERS[start]),
+            narrative: narrativeFor(test, item.question, opts.recalc ? letter : LETTERS[start]),
             baseIndex: baseIndex.get(item),
           };
         }),

@@ -26,7 +26,7 @@ export function buildFlows(lib, test, layoutIn, optsIn) {
   const headerText = (text) => (many ? text : String(text).replace(/\s*[·|–—-]*\s*Version\s*\{version\}/gi, ''));
   const header = (letter, first, rest) => (i) =>
     headerHtml(headerText(i === 0 ? first : rest), { title: test.title, version: letter, date });
-  const footer = (letter) => (i, n) => headerHtml(headerText(layout.footer), { title: test.title, version: letter, date, page: i + 1, pages: n });
+  const footer = (letter) => (i, n) => headerHtml(headerText(i === 0 ? layout.footerFirst ?? layout.footer : layout.footer), { title: test.title, version: letter, date, page: i + 1, pages: n });
 
   const testFlows = [];
   const keyFlows = [];
@@ -113,7 +113,7 @@ export function buildFlows(lib, test, layoutIn, optsIn) {
 
   if (opts.includeMap && many) {
     const rows = versionMap(built, layout);
-    const letters = LETTERS.slice(0, opts.versions).split('');
+    const letters = built.versions.map((v) => v.letter);
     const chunk = 34;
     const blocks = [];
     for (let i = 0; i < rows.length; i += chunk) blocks.push({ html: versionMapTable(rows.slice(i, i + chunk), letters) });

@@ -65,7 +65,8 @@ export function totalPoints(test) {
 
 // Comparable content of a question, ignoring ids and timestamps.
 function contentKey(q) {
-  const { id, created, modified, ...rest } = q;
+  const { id, created, modified, salt, ...rest } = q;
+  if (rest.pairs) rest.pairs = rest.pairs.map((p) => ({ prompt: p.prompt, answer: q.choices.findIndex((c) => c.id === p.choiceId) }));
   if (rest.choices) rest.choices = rest.choices.map(({ id: _id, ...c }) => c);
   return JSON.stringify(rest);
 }

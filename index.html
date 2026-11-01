@@ -11,24 +11,29 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <header class="app-header">
-    <h1><a href="#/">assessor</a></h1>
-    <span id="status" class="status"></span>
-    <div class="header-actions">
-      <button id="open-library" type="button">Open Library…</button>
-      <button id="save-library" type="button" class="primary" title="Save Library (⌘S)">Save Library</button>
-    </div>
-  </header>
-  <div id="banner" class="banner" hidden></div>
-  <div class="layout">
-    <aside id="sidebar" class="sidebar"></aside>
-    <main id="main" class="main">
+  <div class="app">
+    <header class="titlebar">
+      <span class="titlebar-app">assessor</span>
+      <span id="doc-title" class="titlebar-doc"></span>
+      <span id="status" class="status"></span>
+    </header>
+    <nav id="menubar" class="menubar" aria-label="Menu bar"></nav>
+    <div id="toolbar" class="app-toolbar" role="toolbar" aria-label="Toolbar"></div>
+    <div id="banner" class="banner" hidden></div>
+    <main id="main" class="desk">
       <!-- Replaced as soon as the app starts. Browsers won't run the app from a file opened directly. -->
       <div class="empty">
         <p>Starting assessor…</p>
         <p>If this message stays, the app can’t run from this address. Browsers block it when <code>index.html</code> is opened directly from a folder. Use <a href="https://karlmcb.github.io/assessor/">karlmcb.github.io/assessor</a>, or run <code>python3 serve.py</code> in the project folder and open <a href="http://127.0.0.1:8642/">127.0.0.1:8642</a>.</p>
       </div>
     </main>
+    <footer id="docbar" class="docbar" hidden></footer>
+    <div id="sheet" class="sheet" hidden>
+      <div class="sheet-window" role="dialog" aria-modal="true">
+        <button id="sheet-close" class="sheet-close" type="button" aria-label="Close" title="Close (Esc)">✕</button>
+        <div id="sheet-body" class="sheet-body"></div>
+      </div>
+    </div>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>

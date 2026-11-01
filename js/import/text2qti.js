@@ -198,11 +198,8 @@ export function parseText2qti(text, { settings, images = new Map() } = {}) {
         q.answer.accepted = r.short.slice(1);
         questions.push(q);
       } else {
-        // Decided: text answers become a Short Answer question with them as the model answer.
-        const q = make('essay');
-        q.kind = 'short';
-        q.answer.model = r.short.join(' / ');
-        notes.converted.push({ number: r.num, note: 'fill-in-the-blank with text answers became Short Answer' });
+        const q = make('comp');
+        q.answer.accepted = r.short;
         questions.push(q);
       }
       continue;

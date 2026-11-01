@@ -86,8 +86,8 @@ export default {
     const qs = r.banks[0].questions;
     eq(qs[0].type, 'num');
     eq(qs[0].answer.value, '25');
-    eq(qs[1].type, 'essay'); // text answers (newton, N)
-    ok(qs[1].answer.model.includes('newton'));
+    eq(qs[1].type, 'comp'); // text answers (newton, N)
+    eq(qs[1].answer.accepted, ['newton', 'N']);
     const pool = await readCartridge(await fetchBlob('schoology-tests/assessor_export_pool.zip'), settings);
     eq(pool.banks[0].questions.length, 6);
     eq(pool.notes.groups, 1);
