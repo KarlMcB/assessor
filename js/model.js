@@ -283,8 +283,8 @@ export function pruneImages(lib) {
 
 // Validate a parsed library file and fill in anything missing. Throws on files that aren't libraries.
 export function normalizeLibrary(data) {
-  if (!data || data.format !== LIBRARY_FORMAT) throw new Error('This file is not an assessor library.');
-  if (data.version > FORMAT_VERSION) throw new Error('This library was saved by a newer version of assessor.');
+  if (!data || data.format !== LIBRARY_FORMAT) throw new Error('This file is not an Assessor library.');
+  if (data.version > FORMAT_VERSION) throw new Error('This library was saved by a newer version of Assessor.');
   const lib = { ...newLibrary(), ...data };
   lib.settings = { ...defaultSettings(), ...data.settings, defaultPoints: { ...defaultSettings().defaultPoints, ...data.settings?.defaultPoints } };
   lib.banks = (data.banks || []).map(normalizeBank);
@@ -319,8 +319,8 @@ export function bankFile(lib, bank) {
 }
 
 export function readBankFile(data) {
-  if (!data || data.format !== BANK_FORMAT) throw new Error('This file is not an assessor bank.');
-  if (data.version > FORMAT_VERSION) throw new Error('This bank was saved by a newer version of assessor.');
+  if (!data || data.format !== BANK_FORMAT) throw new Error('This file is not an Assessor bank.');
+  if (data.version > FORMAT_VERSION) throw new Error('This bank was saved by a newer version of Assessor.');
   return { bank: normalizeBank(data.bank), images: data.images || {} };
 }
 

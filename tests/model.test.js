@@ -90,7 +90,7 @@ export default {
   },
 
   'non-library files are rejected'() {
-    throws(() => normalizeLibrary({ hello: 1 }), /not an assessor library/);
+    throws(() => normalizeLibrary({ hello: 1 }), /not an Assessor library/);
     throws(() => normalizeLibrary({ format: 'assessor-library', version: 99 }), /newer version/);
   },
 

@@ -303,8 +303,8 @@ function describe(e) {
 
 function renderTitle() {
   const mode = app.kind === 'bank' ? 'Question Bank Editor' : 'Test Builder';
-  titleEl.textContent = app.doc ? `${app.doc.title} — ${mode}` : 'assessor';
-  document.title = app.doc ? `${app.doc.title} — assessor` : 'assessor';
+  titleEl.textContent = app.doc ? `${app.doc.title} — ${mode}` : 'Assessor';
+  document.title = app.doc ? `${app.doc.title} — Assessor` : 'Assessor';
   const st = store.status;
   if (store.hasUnsavedChanges()) {
     statusEl.textContent = `Backup needed: changes since ${formatTime(st.unsavedSince)}`;
@@ -384,7 +384,7 @@ document.addEventListener('visibilitychange', () => {
 try {
   await store.load();
 } catch (err) {
-  add(clear(main), h('div.empty', h('h2', 'Storage unavailable'), h('p', `assessor couldn’t open browser storage: ${err.message}`)));
+  add(clear(main), h('div.empty', h('h2', 'Storage unavailable'), h('p', `Assessor couldn’t open browser storage: ${err.message}`)));
   throw err;
 }
 clear(main);

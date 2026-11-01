@@ -753,7 +753,7 @@ function preferencesDialog() {
 }
 
 function helpDialog() {
-  openDialog('assessor Help', [
+  openDialog('Assessor Help', [
     h('p', 'Build question banks, then make tests from them. Tests hold copies, so editing a test never changes the bank unless you choose “Save to test and bank”.'),
     h('ul',
       h('li', h('strong', 'Saving: '), 'work is kept in this browser as you go. File → Save Library File downloads your backup; keep it somewhere safe.'),
@@ -803,9 +803,9 @@ export const COMMANDS = {
   deleteDoc: { label: 'Delete…', enabled: hasDoc, run: deleteDoc },
   importQti: { label: 'Schoology / Common Cartridge Zip…', run: importQti },
   importText: { label: 'text2qti Text File…', run: importTextFile },
-  importBank: { label: 'assessor Bank File…', run: importBankFile },
+  importBank: { label: 'Assessor Bank File…', run: importBankFile },
   exportSchoology: { label: 'Schoology…', enabled: hasQuestions, run: () => exportDialog(isTest() ? { test: app.doc } : { bank: app.doc }) },
-  exportBankFile: { label: 'assessor Bank File…', enabled: () => app.kind === 'bank', run: exportBankFile },
+  exportBankFile: { label: 'Assessor Bank File…', enabled: () => app.kind === 'bank', run: exportBankFile },
   testToBank: { label: 'Question Bank…', enabled: hasQuestions, run: testToBank },
   print: { label: 'Print…', key: 'cmd+p', enabled: hasQuestions, run: printDocument },
   openLibrary: { label: 'Open Library File…', run: openLibraryFile },
@@ -865,7 +865,7 @@ export const COMMANDS = {
   version: { label: 'Version…', enabled: isTest, run: versionDialog },
   summary: { label: 'Summary', enabled: () => isTest() && hasQuestions(), run: () => { location.hash = `${docHref()}/summary`; } },
 
-  help: { label: 'assessor Help', run: helpDialog },
+  help: { label: 'Assessor Help', run: helpDialog },
   switchMode: {
     label: 'Switch',
     run: () => {
