@@ -296,11 +296,13 @@ The **Select** menu has six methods. They all skip questions already on the test
 | Method | Shortcut | How it works |
 |---|---|---|
 | Randomly | ⌃1 | Enter how many of each type |
-| From a List | ⌃2 | Tick rows in a table, sortable by tag. Shows question text only |
-| While Viewing | ⌃3 | Tick fully drawn questions, with narratives and images |
+| From a List | ⌃2 | Tick rows in a table, sortable by tag. Shows question text, topic and difficulty |
+| While Viewing | ⌃3 | Tick fully drawn questions, with narratives, images and tags |
 | By Standard | ⌃4 | Enter how many for each standard, objective, topic, difficulty or keyword |
 | By Criteria | ⌃5 | Filter by type, tags and text, then add at random or by ticking |
 | All Questions | ⌃6 | Adds everything remaining |
+
+**Filters:** From a List and While Viewing have drop-down filters at the top for Objective, Topic, Difficulty, Standard and Type, plus a text search. The Topic list narrows to the chosen objective. Ticks are kept while you change filters, so you can tick a few questions under one topic, switch topics and tick more, then add them all at once. The filters stay set when you switch between the two tabs, and **Clear filters** resets them. The filter bar and the **Add** button stay at the top while you scroll.
 
 **Text search syntax** (not case-sensitive):
 

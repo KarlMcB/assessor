@@ -19,6 +19,19 @@ export const SELECT_METHODS = {
   all: 'All questions',
 };
 
+// Filters shown above the list and viewing methods. Kept while switching tabs.
+const filters = { objectives: '', topic: '', difficulty: '', standards: '', type: '', text: '' };
+const FILTER_FIELDS = { objectives: 'Objective', topic: 'Topic', difficulty: 'Difficulty', standards: 'Standard' };
+
+export function filterEntries(entries, f = filters) {
+  const clauses = parseQuery(f.text);
+  return entries.filter((e) => {
+    if (f.type && e.q.type !== f.type) return false;
+    for (const k of Object.keys(FILTER_FIELDS)) if (f[k] && !metaValues(e.q, k).includes(f[k])) return false;
+    return matchesQuery(clauses, questionSearchText(e.q));
+  });
+}
+
 export function selectView(main, { testId, method }) {
   const test = store.lib.tests.find((t) => t.id === testId);
   if (!test || !SELECT_METHODS[method]) {
@@ -46,6 +59,65 @@ export function selectView(main, { testId, method }) {
     store.update(() => addToTest(test, entries));
     toast(`Added ${entries.length} question${entries.length === 1 ? '' : 's'}`);
     location.hash = back;
+  }
+
+  // Ticked questions, kept while the filters change.
+  const picked = new Set();
+  const keyOf = (e) => `${e.bank.id}/${e.q.id}`;
+  const pickedEntries = (avail) => avail.filter((e) => picked.has(keyOf(e)));
+
+  // Drop-down filters for objective, topic, difficulty, standard and type, plus a text search.
+  // The topic list narrows to the chosen objective.
+  function filterBar(avail, onChange) {
+    const selects = h('div.filter-selects');
+    const reset = h('button', { type: 'button', onclick: () => {
+      Object.keys(filters).forEach((k) => (filters[k] = ''));
+      search.value = '';
+      drawSelects(); onChange();
+    } }, 'Clear filters');
+    const search = h('input', { type: 'search', value: filters.text, placeholder: 'Search text, e.g. projectile -friction accel*',
+      oninput: (e) => { filters.text = e.target.value; onChange(); } });
+    function drawSelects() {
+      const qs = avail.map((e) => e.q);
+      const topicPool = filters.objectives ? avail.filter((e) => metaValues(e.q, 'objectives').includes(filters.objectives)).map((e) => e.q) : qs;
+      const pool = { objectives: qs, topic: topicPool, difficulty: qs, standards: qs };
+      for (const k of Object.keys(FILTER_FIELDS)) {
+        if (filters[k] && !distinctValues(pool[k], k).includes(filters[k])) filters[k] = '';
+      }
+      const types = TYPE_ORDER.filter((t) => avail.some((e) => e.q.type === t));
+      if (filters.type && !types.includes(filters.type)) filters.type = '';
+      add(clear(selects),
+        Object.entries(FILTER_FIELDS).map(([k, label]) => {
+          const values = distinctValues(pool[k], k);
+          return h('label.field', h('span.field-label', label),
+            select({ '': `All (${values.length})`, ...Object.fromEntries(values.map((v) => [v, v])) }, filters[k], {
+              disabled: !values.length,
+              onchange: (e) => { filters[k] = e.target.value; drawSelects(); onChange(); },
+            }));
+        }),
+        h('label.field', h('span.field-label', 'Type'),
+          select({ '': 'All', ...Object.fromEntries(types.map((t) => [t, QUESTION_TYPES[t].label])) }, filters.type, {
+            onchange: (e) => { filters.type = e.target.value; onChange(); },
+          })),
+      );
+    }
+    drawSelects();
+    return h('div.filter-bar', selects,
+      h('div.filter-search', h('label.field', h('span.field-label', 'Text search'), search), reset),
+      h('span.field-hint', 'Words must all appear. "exact phrase" · -exclude · (either, or) · prefix* — not case-sensitive.'));
+  }
+
+  // The count of shown and ticked questions, with the Add button, kept current.
+  function pickBar(avail) {
+    const status = h('span.match-count');
+    const btn = h('button.primary', { onclick: () => addEntries(pickedEntries(avail)) });
+    const update = (shown) => {
+      const n = pickedEntries(avail).length;
+      status.textContent = `${shown} of ${avail.length} shown · ${n} ticked`;
+      btn.textContent = n ? `Add ${n} ticked question${n === 1 ? '' : 's'}` : 'Add ticked questions';
+      btn.disabled = !n;
+    };
+    return { el: h('div.row.pick-bar', btn, status), update };
   }
 
   function render() {
@@ -86,40 +158,64 @@ export function selectView(main, { testId, method }) {
   function list() {
     const avail = available();
     const sortFields = { order: 'Bank order', ...META_FIELDS };
-    const keyOf = (e) => (listSort === 'order' ? '' : metaValues(e.q, listSort).join(', '));
-    const rows = listSort === 'order'
-      ? avail
-      : avail.slice().sort((a, b) => (keyOf(a) || '￿').localeCompare(keyOf(b) || '￿', undefined, { numeric: true }));
-    const checks = new Map();
+    const sortKey = (e) => (listSort === 'order' ? '' : metaValues(e.q, listSort).join(', '));
     const numberInBank = (e) => e.bank.questions.indexOf(e.q) + 1;
-    add(body, 
-      h('div.row', h('label.field', h('span.field-label', 'Sort by'), select(sortFields, listSort, { onchange: (e) => { listSort = e.target.value; render(); } })),
-        h('span.field-hint', 'Tip: print a bank with its question numbers, then tick the ones you want here.')),
-      avail.length
-        ? h('table.select-table.list',
-            h('thead', h('tr', h('th', ''), h('th', 'Bank'), h('th', '#'), h('th', 'Type'), listSort === 'order' ? null : h('th', sortFields[listSort]), h('th', 'Question'))),
-            h('tbody', rows.map((e) => {
-              const box = h('input', { type: 'checkbox' });
-              checks.set(e, box);
-              return h('tr', { onclick: (ev) => { if (ev.target !== box) box.checked = !box.checked; } },
-                h('td', box), h('td', e.bank.title), h('td.num', String(numberInBank(e))), h('td', typeLabel(e.q)),
-                listSort === 'order' ? null : h('td', keyOf(e)),
-                h('td.snippet', { html: renderRich(e.q.stem, store.lib.images) }));
-            })))
-        : h('p.muted', 'No questions left to add from these banks.'),
-      h('div.row', h('button.primary', { onclick: () => addEntries(rows.filter((e) => checks.get(e).checked)) }, 'Add checked questions')),
+    const results = h('div.filter-results');
+    const bar = pickBar(avail);
+    add(body,
+      h('div.filter-sticky', filterBar(avail, draw),
+        h('div.row', h('label.field', h('span.field-label', 'Sort by'), select(sortFields, listSort, { onchange: (e) => { listSort = e.target.value; draw(); } })),
+          h('span.field-hint', 'Ticks are kept when you change the filters.')),
+        bar.el),
+      results,
     );
+    function draw() {
+      const shown = filterEntries(avail);
+      const rows = listSort === 'order'
+        ? shown
+        : shown.slice().sort((a, b) => (sortKey(a) || '\uffff').localeCompare(sortKey(b) || '\uffff', undefined, { numeric: true }));
+      bar.update(shown.length);
+      add(clear(results), !avail.length
+        ? h('p.muted', 'No questions left to add from these banks.')
+        : !rows.length
+          ? h('p.muted', 'No questions match these filters.')
+          : h('table.select-table.list',
+              h('thead', h('tr', h('th', ''), h('th', 'Bank'), h('th', '#'), h('th', 'Type'), h('th', 'Topic'), h('th', 'Difficulty'), listSort === 'order' || ['topic', 'difficulty'].includes(listSort) ? null : h('th', sortFields[listSort]), h('th', 'Question'))),
+              h('tbody', rows.map((e) => {
+                const box = h('input', { type: 'checkbox', checked: picked.has(keyOf(e)),
+                  onchange: () => { box.checked ? picked.add(keyOf(e)) : picked.delete(keyOf(e)); bar.update(shown.length); } });
+                return h('tr', { onclick: (ev) => { if (ev.target !== box) { box.checked = !box.checked; box.dispatchEvent(new Event('change')); } } },
+                  h('td', box), h('td', e.bank.title), h('td.num', String(numberInBank(e))), h('td', typeLabel(e.q)),
+                  h('td', e.q.meta.topic || ''), h('td', e.q.meta.difficulty || ''),
+                  listSort === 'order' || ['topic', 'difficulty'].includes(listSort) ? null : h('td', sortKey(e)),
+                  h('td.snippet', { html: renderRich(e.q.stem, store.lib.images) }));
+              }))));
+    }
+    draw();
   }
 
   // ---- while viewing -----------------------------------------------------------------------
 
   function view() {
     const avail = available();
-    add(body, previewChecklist(avail, (picked) => addEntries(picked)));
+    const results = h('div.filter-results');
+    const bar = pickBar(avail);
+    add(body, h('div.filter-sticky', filterBar(avail, draw), bar.el), results);
+    function draw() {
+      const shown = filterEntries(avail);
+      bar.update(shown.length);
+      add(clear(results), !avail.length
+        ? h('p.muted', 'No questions left to add from these banks.')
+        : shown.length
+          ? previewChecklist(shown, null, { picked, keyOf, onPick: () => bar.update(shown.length) })
+          : h('p.muted', 'No questions match these filters.'));
+    }
+    draw();
   }
 
   // Rendered questions with checkboxes, grouped by bank then type.
-  function previewChecklist(entries, onAdd) {
+  // With `keep`, ticks are stored in keep.picked and no Add buttons are drawn here.
+  function previewChecklist(entries, onAdd, keep = null) {
     const checks = new Map();
     const container = h('div.view-list');
     const byBank = new Map();
@@ -127,8 +223,12 @@ export function selectView(main, { testId, method }) {
       if (!byBank.has(e.bank)) byBank.set(e.bank, []);
       byBank.get(e.bank).push(e);
     }
+    const setPick = (e, on) => {
+      checks.get(e).checked = on;
+      if (keep) { on ? keep.picked.add(keep.keyOf(e)) : keep.picked.delete(keep.keyOf(e)); }
+    };
     const groupBox = (members) =>
-      h('input', { type: 'checkbox', title: 'Select all in this group', onchange: (ev) => members.forEach((m) => (checks.get(m).checked = ev.target.checked)) });
+      h('input', { type: 'checkbox', title: 'Select all in this group', onchange: (ev) => { members.forEach((m) => setPick(m, ev.target.checked)); keep?.onPick(); } });
     for (const [bank, list] of byBank) {
       container.append(h('h3.view-bank', h('label.check', groupBox(list), bank.title)));
       for (const g of sortedByType(list.map((e) => e.q))) {
@@ -136,7 +236,8 @@ export function selectView(main, { testId, method }) {
         container.append(h('h4.type-heading', h('label.check', groupBox(members), `${QUESTION_TYPES[g.type].label} (${members.length})`)));
         let shown = null;
         for (const e of members) {
-          const box = h('input', { type: 'checkbox' });
+          const box = h('input', { type: 'checkbox', checked: keep ? keep.picked.has(keep.keyOf(e)) : false,
+            onchange: () => { if (keep) { setPick(e, box.checked); keep.onPick(); } } });
           checks.set(e, box);
           // A narrative often holds the question's figure, so show it above the questions using it.
           const n = narrativeOf(e.bank, e.q);
@@ -145,11 +246,13 @@ export function selectView(main, { testId, method }) {
           }
           shown = n;
           const narrative = narrativeContext(n, n?.id);
-          container.append(h('label.q-card.pickable', h('div.pick', box), h('div.q-card-body', questionBody(e.q, store.lib.images, { narrative }))));
+          const tags = [e.q.meta.topic, e.q.meta.difficulty, ...e.q.meta.standards].filter(Boolean).join(' · ');
+          container.append(h('label.q-card.pickable', h('div.pick', box), h('div.q-card-body', tags ? h('div.q-tags', tags) : null, questionBody(e.q, store.lib.images, { narrative }))));
         }
       }
     }
     if (!entries.length) container.append(h('p.muted', 'No questions to show.'));
+    if (keep) return container;
     const addBtn = () => h('button.primary', { onclick: () => onAdd(entries.filter((e) => checks.get(e).checked)) }, 'Add checked questions');
     return h('div', h('div.row', addBtn()), container, entries.length > 3 ? h('div.row', addBtn()) : null);
   }
