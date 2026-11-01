@@ -1,6 +1,6 @@
 # assessor
 
-A test generator for teachers: question banks, algorithmic questions, printed versions with answer keys, and Schoology export. See [SPEC.md](SPEC.md) for the full plan.
+A test generator for teachers: question banks, algorithmic questions, printed versions with answer keys, and Schoology export. See [GUIDE.md](GUIDE.md) for how to use it and how it's built, and [SPEC.md](SPEC.md) for the original plan.
 
 ## Status
 

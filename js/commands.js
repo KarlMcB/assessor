@@ -818,7 +818,7 @@ function helpDialog() {
       h('li', h('strong', 'Dynamic questions: '), 'define values under Algorithm in the editor and use them as [[name]].'),
       h('li', h('strong', 'Printing: '), 'in Safari’s print dialog, choose the same paper size and turn off “Print headers and footers”.'),
       h('li', h('strong', 'Shortcuts: '), 'menus show each key. ⌃ is the Control key, used where Safari keeps the ⌘ version for itself.')),
-    h('p', h('a', { href: 'https://github.com/KarlMcB/assessor#readme', target: '_blank', rel: 'noopener' }, 'Project page and full specification')),
+    h('p', h('a', { href: 'https://github.com/KarlMcB/assessor/blob/main/GUIDE.md', target: '_blank', rel: 'noopener' }, 'Full guide')),
   ], [{ label: 'Close', primary: true }], { wide: true });
 }
 
