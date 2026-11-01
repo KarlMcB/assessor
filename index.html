@@ -22,7 +22,13 @@
   <div id="banner" class="banner" hidden></div>
   <div class="layout">
     <aside id="sidebar" class="sidebar"></aside>
-    <main id="main" class="main"></main>
+    <main id="main" class="main">
+      <!-- Replaced as soon as the app starts. Browsers won't run the app from a file opened directly. -->
+      <div class="empty">
+        <p>Starting assessor…</p>
+        <p>If this message stays, the app can’t run from this address. Browsers block it when <code>index.html</code> is opened directly from a folder. Use <a href="https://karlmcb.github.io/assessor/">karlmcb.github.io/assessor</a>, or run <code>python3 serve.py</code> in the project folder and open <a href="http://127.0.0.1:8642/">127.0.0.1:8642</a>.</p>
+      </div>
+    </main>
   </div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 </body>
